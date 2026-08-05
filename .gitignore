@@ -1,0 +1,19 @@
+# ---- 构建产物 ----
+[Bb]in/
+[Oo]bj/
+node_modules/
+OBS_Helper.Mac/src-tauri/target/
+OBS_Helper.Mac/src-tauri/gen/
+
+# Tauri 由源图生成的图标（保留源图与生成脚本，其余随构建重新生成）
+OBS_Helper.Mac/src-tauri/icons/*
+!OBS_Helper.Mac/src-tauri/icons/app-icon.png
+!OBS_Helper.Mac/src-tauri/icons/generate_icon.py
+
+# macOS 系统文件
+.DS_Store
+
+# 编辑器
+.vscode/
+.idea/
+*.user

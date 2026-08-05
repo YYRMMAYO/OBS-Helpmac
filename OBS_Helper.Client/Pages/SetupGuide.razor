@@ -1,0 +1,179 @@
+@page "/setup"
+@inject ProblemService ProblemService
+
+<PageTitle>直播间搭建</PageTitle>
+
+<div class="setup">
+    <h1>🎬 直播间搭建向导</h1>
+    <p class="muted">按阶段一步步搭建，选择平台可直达对应接入指南。</p>
+
+    <h2 class="section-title">🧭 搭建流程</h2>
+    <div class="steps-flow">
+        @foreach (var step in flow)
+        {
+            <a class="flow-card" href="@step.Href">
+                <span class="flow-no">@step.No</span>
+                <span class="flow-body">
+                    <span class="flow-title">@step.Title</span>
+                    <span class="flow-desc">@step.Desc</span>
+                </span>
+                <span class="flow-go">›</span>
+            </a>
+        }
+    </div>
+
+    <h2 class="section-title">📡 选择平台 / 场景</h2>
+    <div class="cat-filter">
+        @foreach (var p in platforms)
+        {
+            <button class="chip @(activePlatform == p.Key ? "active" : "")" style="--cat:@p.Color" @onclick="() => SetPlatform(p.Key)">@p.Icon @p.Label</button>
+        }
+    </div>
+
+    @if (IsAll)
+    {
+        <div class="prob-list">
+            @foreach (var p in setupProblems)
+            {
+                <ProblemCard Problem="p" ShowPlatforms="true" />
+            }
+        </div>
+    }
+    else
+    {
+        var match = Matched;
+        var common = CommonFallback(match);
+
+        <h3 class="setup-sub">@CurrentLabel 专属指南 <span class="setup-count">@match.Count</span></h3>
+        @if (match.Count == 0)
+        {
+            <p class="empty">该平台暂无专门指南，可直接参考下方通用步骤。</p>
+        }
+        else
+        {
+            <div class="prob-list">
+                @foreach (var p in match)
+                {
+                    <ProblemCard Problem="p" ShowPlatforms="true" />
+                }
+            </div>
+        }
+
+        @if (common.Count > 0)
+        {
+            <h3 class="setup-sub">通用步骤（同样适用） <span class="setup-count">@common.Count</span></h3>
+            <div class="prob-list">
+                @foreach (var p in common)
+                {
+                    <ProblemCard Problem="p" ShowPlatforms="true" />
+                }
+            </div>
+        }
+    }
+
+    <p class="note">需要同时多平台开播？查看「多平台同时推流」与「竖屏 9:16 直播」。</p>
+</div>
+
+@code {
+    private List<Problem> setupProblems = new();
+    private string activePlatform = "all";
+
+    private static readonly (string No, string Title, string Desc, string Href)[] flow =
+    {
+        ("1", "准备与权限", "更新 OBS、以管理员运行（Win）或授予屏幕录制/麦克风权限（macOS）。", "diagnostic"),
+        ("2", "场景与来源", "新建场景，添加捕获源、摄像头、音频，排好层级。", "problem/st-scene"),
+        ("3", "音频校对", "麦克风/桌面声音电平正常，加降噪，统一 48kHz。", "problem/au-mic"),
+        ("4", "推流设置", "选平台、粘贴密钥，硬件编码 + CBR + 关键帧 2s。", "problem/st-general"),
+        ("5", "开播自检", "看统计面板掉帧，先录一段自测再开播。", "diagnostic"),
+        ("6", "多平台 / 竖屏", "用插件做多路推流或竖屏 9:16 画布。", "problem/st-multi"),
+    };
+
+    /// <summary>
+    /// 平台筛选项。<c>Kws</c> 是该平台的多个别名关键词（含英文写法），
+    /// <c>OsFilter</c> 为非空时还会按 <see cref="Problem.Platforms"/> 做操作系统级过滤。
+    /// </summary>
+    private static readonly (string Key, string Label, string Icon, string Color, string[] Kws, string OsFilter)[] platforms =
+    {
+        ("all",          "全部",      "📋", "#8e44ad", new string[0], ""),
+        ("bilibili",     "B站",       "📺", "#fb7299", new[] { "B站", "哔哩", "bilibili" }, ""),
+        ("douyin",       "抖音",      "🎵", "#fe2c55", new[] { "抖音", "douyin", "tiktok" }, ""),
+        ("kuaishou",     "快手",      "⚡", "#ff4906", new[] { "快手", "kuaishou" }, ""),
+        ("youtube",      "YouTube",   "▶️", "#ff0000", new[] { "youtube", "油管" }, ""),
+        ("twitch",       "Twitch",    "🟣", "#9146ff", new[] { "twitch" }, ""),
+        ("videoaccount", "视频号",    "💬", "#07c160", new[] { "视频号", "微信" }, ""),
+        ("xhs",          "小红书",    "📕", "#ff2442", new[] { "小红书", "xhs" }, ""),
+        ("vertical",     "竖屏",      "📱", "#1abc9c", new[] { "竖屏", "9:16", "vertical" }, ""),
+        ("mac",          "macOS",     "🍎", "#555555", new[] { "macos", "mac" }, "macOS"),
+    };
+
+    private bool IsAll => string.IsNullOrEmpty(activePlatform) || activePlatform == "all";
+
+    private string CurrentLabel =>
+        platforms.FirstOrDefault(p => p.Key == activePlatform).Label ?? "该平台";
+
+    /// <summary>
+    /// 平台专属条目：在标题 / id / 症状 / 步骤标题里命中任一关键词，
+    /// 且（若该平台声明了 OsFilter）适用平台包含对应系统。
+    /// </summary>
+    private List<Problem> Matched
+    {
+        get
+        {
+            var cur = platforms.FirstOrDefault(p => p.Key == activePlatform);
+            var kws = cur.Kws ?? System.Array.Empty<string>();
+            if (kws.Length == 0) return setupProblems;
+
+            return setupProblems
+                .Where(p => MatchesOs(p, cur.OsFilter) && HitsKeyword(p, kws))
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// 通用条目：不专属于任何具体平台（未命中任何平台关键词）的搭建指南，
+    /// 例如「从零搭建直播间」「场景与来源布局」，选了平台后仍然应该看得到。
+    /// </summary>
+    private List<Problem> CommonFallback(List<Problem> already)
+    {
+        var cur = platforms.FirstOrDefault(p => p.Key == activePlatform);
+        var allKws = platforms
+            .Where(p => p.Key != "all")
+            .SelectMany(p => p.Kws)
+            .ToArray();
+
+        var taken = already.Select(p => p.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return setupProblems
+            .Where(p => !taken.Contains(p.Id))
+            .Where(p => MatchesOs(p, cur.OsFilter))
+            .Where(p => !HitsKeyword(p, allKws))
+            .ToList();
+    }
+
+    private static bool MatchesOs(Problem p, string os)
+    {
+        if (string.IsNullOrEmpty(os)) return true;
+        if (p.Platforms is null || p.Platforms.Length == 0) return true;
+        return p.Platforms.Any(x => x.Contains(os, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HitsKeyword(Problem p, string[] kws)
+    {
+        foreach (var kw in kws)
+        {
+            if (string.IsNullOrWhiteSpace(kw)) continue;
+            if (p.Title.Contains(kw, StringComparison.OrdinalIgnoreCase)) return true;
+            if (p.Id.Contains(kw, StringComparison.OrdinalIgnoreCase)) return true;
+            if (p.Symptoms.Any(s => s.Contains(kw, StringComparison.OrdinalIgnoreCase))) return true;
+            if (p.Steps.Any(s => s.Title.Contains(kw, StringComparison.OrdinalIgnoreCase))) return true;
+        }
+        return false;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        setupProblems = await ProblemService.GetByCategoryAsync("setup");
+    }
+
+    private void SetPlatform(string key) => activePlatform = key;
+}

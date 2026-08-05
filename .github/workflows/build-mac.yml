@@ -1,0 +1,60 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14          # Apple Silicon 原生构建机
+            target: aarch64-apple-darwin
+            arch: aarch64
+          - os: macos-13          # Intel 原生构建机
+            target: x86_64-apple-darwin
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_BUILD_TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Blazor WASM 前端：dotnet publish 产出即 frontendDist 指向的 wwwroot
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish Blazor client
+        run: dotnet publish OBS_Helper.Client/OBS_Helper.Client.csproj -c Release
+
+      # Rust 工具链（含目标平台 triple）
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Tauri CLI 走 npm（比 cargo install 快得多）
+      - name: Install Tauri CLI
+        run: npm install --no-save --prefix . @tauri-apps/cli
+
+      # icons/ 被 gitignore，需由源图现场生成（app-icon.png 已入库）
+      - name: Generate icons
+        run: npx tauri icon src-tauri/icons/app-icon.png --output src-tauri/icons
+        working-directory: OBS_Helper.Mac
+
+      # 构建 .app / .dmg（未签名；签名请配置 MAC_SIGN_IDENTITY 后另行处理）
+      - name: Build app (dmg)
+        run: npx tauri build --target ${{ matrix.target }}
+        working-directory: OBS_Helper.Mac/src-tauri
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-helper-mac-${{ matrix.arch }}
+          path: |
+            OBS_Helper.Mac/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            OBS_Helper.Mac/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
+          if-no-files-found: error

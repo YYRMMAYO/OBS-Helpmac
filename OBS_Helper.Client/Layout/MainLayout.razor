@@ -1,0 +1,65 @@
+﻿@inherits LayoutComponentBase
+@inject ObsSettingsService Settings
+@inject AiSettingsService AiSettings
+@inject AppearanceService Appearance
+@using OBS_Helper.Client.Services.Obs
+@using OBS_Helper.Client.Services.Ai
+
+<div class="app-shell">
+    <a class="skip-link" href="#main-content">跳到主内容</a>
+
+    <header class="app-bar" role="banner">
+        <a class="brand" href="" aria-label="OBS 直播排障助手 首页">
+            <span class="brand-logo">OBS</span>
+            <span class="brand-text">直播排障助手</span>
+        </a>
+        <a class="gear" href="settings" aria-label="设置" title="设置">⚙️</a>
+    </header>
+
+    <main id="main-content" class="app-content" tabindex="-1">
+        @Body
+    </main>
+
+    <nav class="bottom-nav" aria-label="主导航">
+        <NavLink class="nav-tab" href="" Match="NavLinkMatch.All" aria-label="首页">
+            <span class="tab-icon" aria-hidden="true">🏠</span><span class="tab-label">首页</span>
+        </NavLink>
+        <NavLink class="nav-tab" href="search" aria-label="搜索">
+            <span class="tab-icon" aria-hidden="true">🔍</span><span class="tab-label">搜索</span>
+        </NavLink>
+        <NavLink class="nav-tab" href="assistant" aria-label="助手">
+            <span class="tab-icon" aria-hidden="true">🤖</span><span class="tab-label">助手</span>
+        </NavLink>
+        <NavLink class="nav-tab" href="template" aria-label="模板">
+            <span class="tab-icon" aria-hidden="true">🧩</span><span class="tab-label">模板</span>
+        </NavLink>
+        <NavLink class="nav-tab" href="performance" aria-label="监控">
+            <span class="tab-icon" aria-hidden="true">📊</span><span class="tab-label">监控</span>
+        </NavLink>
+        <NavLink class="nav-tab" href="diagnostic" aria-label="诊断">
+            <span class="tab-icon" aria-hidden="true">🩺</span><span class="tab-label">诊断</span>
+        </NavLink>
+        <NavLink class="nav-tab" href="setup" aria-label="搭建">
+            <span class="tab-icon" aria-hidden="true">🎬</span><span class="tab-label">搭建</span>
+        </NavLink>
+        <NavLink class="nav-tab" href="console" aria-label="控制台">
+            <span class="tab-icon" aria-hidden="true">🎛️</span><span class="tab-label">控制台</span>
+        </NavLink>
+        <NavLink class="nav-tab" href="guide" aria-label="排障指引">
+            <span class="tab-icon" aria-hidden="true">📖</span><span class="tab-label">指引</span>
+        </NavLink>
+        <NavLink class="nav-tab" href="settings" aria-label="设置">
+            <span class="tab-icon" aria-hidden="true">⚙️</span><span class="tab-label">设置</span>
+        </NavLink>
+    </nav>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // 应用启动即加载连接设置、AI 设置与外观偏好（幂等），供各页面与桌面壳桥接共用。
+        await Settings.LoadAsync();
+        await AiSettings.LoadAsync();
+        await Appearance.InitializeAsync();
+    }
+}
