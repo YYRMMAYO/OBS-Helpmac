@@ -2,8 +2,12 @@
 @inject ObsSettingsService Settings
 @inject AiSettingsService AiSettings
 @inject AppearanceService Appearance
+@inject ShellCommandService Shell
+@inject SceneAutoSwitcherService AutoSwitch
+@inject ControlTimerService Timer
 @using OBS_Helper.Client.Services.Obs
 @using OBS_Helper.Client.Services.Ai
+@using OBS_Helper.Client.Services.Shell
 
 <div class="app-shell">
     <a class="skip-link" href="#main-content">跳到主内容</a>
@@ -61,5 +65,15 @@
         await Settings.LoadAsync();
         await AiSettings.LoadAsync();
         await Appearance.InitializeAsync();
+
+        // 桌面 Shell：启动托盘 / 热键事件监听（无宿主环境静默跳过）
+        await Shell.InitializeAsync();
+
+        // 场景自动切换：加载规则并按配置决定是否启动轮询
+        await AutoSwitch.LoadAsync();
+        if (AutoSwitch.Settings.Enabled) AutoSwitch.Start();
+
+        // 定时停止：加载倒计时（重启后继续计时）
+        await Timer.LoadAsync();
     }
 }

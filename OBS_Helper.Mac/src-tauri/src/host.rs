@@ -31,8 +31,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::Manager;
+
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_dialog::FilePath;
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 use zip::write::SimpleFileOptions;
 use zip::{ZipArchive, ZipWriter};
 
@@ -125,6 +128,17 @@ fn dispatch(app: Option<&tauri::AppHandle>, action: &str, payload: &str) -> Resu
         "config.resetFull" => config_reset_full(),
         "system.sample" => system_sample(),
         "app.checkUpdate" => app_check_update(),
+        "system.foregroundApp" => foreground_app(),
+        "shell.trayState" => shell_tray_state(app, &p),
+        "shell.getPrefs" => shell_get_prefs(),
+        "shell.setPrefs" => shell_set_prefs(&p),
+        "mini.toggle" => mini_toggle(app.ok_or_else(|| "该命令需要宿主上下文。".to_string())?),
+        "mini.show" => mini_show(app.ok_or_else(|| "该命令需要宿主上下文。".to_string())?),
+        "mini.hide" => mini_hide(app.ok_or_else(|| "该命令需要宿主上下文。".to_string())?),
+        "window.showMain" => window_show_main(app.ok_or_else(|| "该命令需要宿主上下文。".to_string())?),
+        "window.hideMain" => window_hide_main(app.ok_or_else(|| "该命令需要宿主上下文。".to_string())?),
+        "window.toggleMain" => window_toggle_main(app.ok_or_else(|| "该命令需要宿主上下文。".to_string())?),
+        "app.quit" => app_quit(app.ok_or_else(|| "该命令需要宿主上下文。".to_string())?),
         other => Err(format!("未知命令: {other}")),
     }
 }
@@ -2275,6 +2289,397 @@ fn app_check_update() -> Result<String, String> {
         }
     }
     serde_json::to_string(&tags).map_err(|e| format!("序列化失败: {e}"))
+}
+
+// ===========================================================================
+// 桌面 Shell 控制层：托盘状态 / 偏好 / 小窗 / 主窗口 / 前台应用 / 热键
+// ===========================================================================
+//
+// 对应 Windows 侧 TrayService + GlobalHotkeyService + MiniWindowService +
+// SceneAutoSwitcher 的「桌面壳」部分。设计原则：
+//   * 托盘 / 热键 / 单实例都只是「事件触发器」：把动作（toggleRecord / toggleStream /
+//     toggleVCam / toggleMini / toggleMain / quit）推送给前端（Blazor WASM），
+//     由前端 ObsConnectionService 执行真正的 OBS 操作。宿主不持有连接，避免双份状态。
+//   * 偏好（关闭到托盘、小窗位置）落盘在应用数据目录 prefs.json，非机密、明文即可。
+//   * 热键注册失败静默降级（被系统其它应用占用时只影响该条，不影响其它功能）。
+
+#[derive(Default)]
+struct ShellPrefs {
+    close_to_tray: bool,
+    mini_x: Option<i32>,
+    mini_y: Option<i32>,
+}
+
+static SHELL_PREFS: OnceLock<Mutex<ShellPrefs>> = OnceLock::new();
+static TRAY_HANDLE: OnceLock<Mutex<Option<tauri::tray::TrayIcon>>> = OnceLock::new();
+
+fn prefs_path() -> PathBuf {
+    app_data_dir().join("prefs.json")
+}
+
+fn shell_prefs_lock() -> &'static Mutex<ShellPrefs> {
+    SHELL_PREFS.get_or_init(|| Mutex::new(ShellPrefs::default()))
+}
+
+/// 加载 prefs.json 到内存（main.rs setup 时调用一次）。
+pub fn init_shell_state(_app: &tauri::AppHandle) {
+    let mut prefs = shell_prefs_lock().lock().unwrap_or_else(|p| p.into_inner());
+    if let Ok(raw) = fs::read_to_string(prefs_path()) {
+        if let Ok(v) = serde_json::from_str::<Value>(&raw) {
+            prefs.close_to_tray = v.get("closeToTray").and_then(Value::as_bool).unwrap_or(true);
+            if let Some(m) = v.get("mini") {
+                prefs.mini_x = m.get("x").and_then(Value::as_i64).map(|x| x as i32);
+                prefs.mini_y = m.get("y").and_then(Value::as_i64).map(|y| y as i32);
+            }
+        }
+    }
+}
+
+fn persist_prefs(prefs: &ShellPrefs) {
+    let json = serde_json::json!({
+        "closeToTray": prefs.close_to_tray,
+        "mini": {
+            "x": prefs.mini_x.unwrap_or(0),
+            "y": prefs.mini_y.unwrap_or(0)
+        }
+    });
+    let _ = fs::create_dir_all(app_data_dir());
+    let _ = fs::write(prefs_path(), serde_json::to_string_pretty(&json).unwrap_or_default());
+}
+
+/// 关闭按钮是否「最小化到托盘」（main.rs 关闭事件判断用）。
+pub fn is_close_to_tray() -> bool {
+    shell_prefs_lock()
+        .lock()
+        .map(|p| p.close_to_tray)
+        .unwrap_or(true)
+}
+
+/// 记录小窗最后位置（main.rs 窗口移动事件调用）。macOS 事件给的是物理坐标。
+pub fn save_mini_position(pos: &tauri::PhysicalPosition<i32>) {
+    if let Ok(mut p) = shell_prefs_lock().lock() {
+        p.mini_x = Some(pos.x);
+        p.mini_y = Some(pos.y);
+        persist_prefs(&p);
+    }
+}
+
+/// 持有托盘句柄，供 shell.trayState 更新菜单文案（main.rs build_tray 调用）。
+pub fn set_tray_handle(tray: tauri::tray::TrayIcon) {
+    let _ = TRAY_HANDLE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .map(|mut t| *t = Some(tray));
+}
+
+/// 前端上报 OBS 状态，托盘据此刷新「开始/停止」文案、可用性与 ToolTip。
+///
+/// Tauri 2.11 的 TrayIcon 没有 menu getter（只能 set_menu），因此状态变化时
+/// 重建整个菜单（低频操作，开销可忽略）。菜单结构见 main.rs build_tray。
+fn shell_tray_state(app: Option<&tauri::AppHandle>, p: &Value) -> Result<String, String> {
+    let connected = bool_of(p, "connected");
+    let recording = bool_of(p, "recording");
+    let streaming = bool_of(p, "streaming");
+    let vcam = bool_of(p, "vcam");
+
+    let mut tooltip = "OBS 排障助手".to_string();
+    if connected {
+        let mut parts: Vec<&str> = Vec::new();
+        if recording { parts.push("录制中"); }
+        if streaming { parts.push("推流中"); }
+        if vcam { parts.push("虚拟摄像头"); }
+        if !parts.is_empty() { tooltip = format!("OBS 排障助手 · {}", parts.join(" · ")); }
+    }
+
+    // 重建菜单
+    if let Some(a) = app {
+        if let Some(mtx) = TRAY_HANDLE.get() {
+            let tray = mtx.lock().map(|g| g.clone()).unwrap_or(None);
+            if let Some(tray) = tray {
+                if let Ok(menu) = build_tray_menu(a, connected, recording, streaming, vcam) {
+                    let _ = tray.set_menu(Some(menu));
+                }
+                let _ = tray.set_tooltip(Some(&tooltip));
+            }
+        }
+    }
+    Ok(String::new())
+}
+
+/// 构建托盘菜单（状态参数决定文案与可用性）。main.rs 初始构建与状态刷新共用。
+pub fn build_tray_menu(
+    app: &tauri::AppHandle,
+    connected: bool,
+    recording: bool,
+    streaming: bool,
+    vcam: bool,
+) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    let show_main = tauri::menu::MenuItem::with_id(app, "show_main", "显示主窗口", true, None::<&str>)?;
+    let sep1 = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let toggle_record = tauri::menu::MenuItem::with_id(
+        app,
+        "toggle_record",
+        if recording { "停止录制" } else { "开始录制" },
+        connected,
+        None::<&str>,
+    )?;
+    let toggle_stream = tauri::menu::MenuItem::with_id(
+        app,
+        "toggle_stream",
+        if streaming { "停止推流" } else { "开始推流" },
+        connected,
+        None::<&str>,
+    )?;
+    let toggle_vcam = tauri::menu::MenuItem::with_id(
+        app,
+        "toggle_vcam",
+        if vcam { "关闭虚拟摄像头" } else { "开启虚拟摄像头" },
+        connected,
+        None::<&str>,
+    )?;
+    let sep2 = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let toggle_mini = tauri::menu::MenuItem::with_id(app, "toggle_mini", "小窗控制（录制 / 推流）", true, None::<&str>)?;
+    let sep3 = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let quit = tauri::menu::MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+
+    tauri::menu::Menu::with_items(
+        app,
+        &[
+            &show_main,
+            &sep1,
+            &toggle_record,
+            &toggle_stream,
+            &toggle_vcam,
+            &sep2,
+            &toggle_mini,
+            &sep3,
+            &quit,
+        ],
+    )
+}
+
+// ---------------------------------------------------------------- 偏好
+
+/// 读取偏好（前端设置页用）。
+fn shell_get_prefs() -> Result<String, String> {
+    let p = shell_prefs_lock().lock().unwrap_or_else(|x| x.into_inner());
+    let json = serde_json::json!({
+        "closeToTray": p.close_to_tray
+    });
+    serde_json::to_string(&json).map_err(|e| format!("序列化失败: {e}"))
+}
+
+/// 保存偏好（前端设置页用）。payload: { closeToTray: bool }
+fn shell_set_prefs(p: &Value) -> Result<String, String> {
+    if let Ok(mut prefs) = shell_prefs_lock().lock() {
+        if let Some(b) = p.get("closeToTray").and_then(Value::as_bool) {
+            prefs.close_to_tray = b;
+        }
+        persist_prefs(&prefs);
+    }
+    Ok(String::new())
+}
+
+// ---------------------------------------------------------------- 小窗控制
+
+fn mini_show(app: &tauri::AppHandle) -> Result<String, String> {
+    let win = app
+        .get_webview_window("mini")
+        .ok_or_else(|| "小窗不可用。".to_string())?;
+    restore_mini_position(&win);
+    let _ = win.show();
+    let _ = win.set_focus();
+    Ok(String::new())
+}
+
+fn mini_hide(app: &tauri::AppHandle) -> Result<String, String> {
+    if let Some(win) = app.get_webview_window("mini") {
+        let _ = win.hide();
+    }
+    Ok(String::new())
+}
+
+fn mini_toggle(app: &tauri::AppHandle) -> Result<String, String> {
+    if let Some(win) = app.get_webview_window("mini") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+        } else {
+            restore_mini_position(&win);
+            let _ = win.show();
+            let _ = win.set_focus();
+        }
+    }
+    Ok(String::new())
+}
+
+fn restore_mini_position(win: &tauri::WebviewWindow) {
+    let (x, y) = {
+        let p = shell_prefs_lock().lock().unwrap_or_else(|x| x.into_inner());
+        (p.mini_x, p.mini_y)
+    };
+    if let (Some(x), Some(y)) = (x, y) {
+        let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+}
+
+// ---------------------------------------------------------------- 主窗口控制
+
+fn window_show_main(app: &tauri::AppHandle) -> Result<String, String> {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+    }
+    Ok(String::new())
+}
+
+fn window_hide_main(app: &tauri::AppHandle) -> Result<String, String> {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.hide();
+    }
+    Ok(String::new())
+}
+
+fn window_toggle_main(app: &tauri::AppHandle) -> Result<String, String> {
+    if let Some(win) = app.get_webview_window("main") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+        } else {
+            let _ = win.show();
+            let _ = win.unminimize();
+            let _ = win.set_focus();
+        }
+    }
+    Ok(String::new())
+}
+
+fn app_quit(app: &tauri::AppHandle) -> Result<String, String> {
+    // 完全退出：先隐藏小窗避免残留，然后退出进程
+    let _ = mini_hide(app);
+    app.exit(0);
+    Ok(String::new())
+}
+
+// ---------------------------------------------------------------- 前台应用
+//
+// 场景自动切换的信号源。Windows 侧用 GetForegroundWindow 拿前台窗口标题，
+// macOS 没有等价公开 API（AX 权限才能读窗口标题），改用 `lsappinfo front`
+// 取前台应用的 bundle id，规则匹配按「应用名」而非「窗口标题」。
+// 这是平台差异的有意取舍：大多数切换场景的使用场景按应用判断已经足够。
+
+fn foreground_app() -> Result<String, String> {
+    // lsappinfo front 输出形如：ASN:0x0-0x12345:  com.apple.Safari
+    let out = run_cmd(&["/usr/bin/lsappinfo", "front"]);
+    let bundle_id = out
+        .split_whitespace()
+        .last()
+        .map(str::to_string)
+        .unwrap_or_default();
+
+    let (bundle_id, name) = if bundle_id.is_empty() {
+        // 兜底：osascript 查询（可能触发辅助功能授权；失败则返回空）
+        let via_script = run_cmd(&[
+            "/usr/bin/osascript",
+            "-e",
+            "tell application \"System Events\" to get name of first application process whose frontmost is true",
+        ]);
+        (String::new(), via_script)
+    } else {
+        let name = bundle_id
+            .rsplit('.')
+            .next()
+            .unwrap_or(&bundle_id)
+            .to_string();
+        (bundle_id, name)
+    };
+
+    let json = serde_json::json!({
+        "bundleId": bundle_id,
+        "name": name
+    });
+    serde_json::to_string(&json).map_err(|e| format!("序列化失败: {e}"))
+}
+
+// ---------------------------------------------------------------- 全局热键
+
+/// 默认热键表（与 Windows 侧 GlobalHotkeyService 默认值一致）。
+/// action 是推送给前端的动作名；spec 是注册用的快捷键字符串。
+pub const DEFAULT_HOTKEYS: [(&str, &str); 5] = [
+    ("toggleRecord", "CommandOrControl+Alt+R"),
+    ("toggleStream", "CommandOrControl+Alt+S"),
+    ("toggleVCam", "CommandOrControl+Alt+C"),
+    ("toggleMini", "CommandOrControl+Alt+M"),
+    ("toggleMain", "CommandOrControl+Alt+O"),
+];
+
+/// 解析形如 "CommandOrControl+Alt+R" 的快捷键字符串，返回 (Modifiers, Code)。
+///
+/// 目前支持的键：A-Z / 0-9 / F1-F12；修饰键：Ctrl / Alt / Shift / Command(Cmd)。
+fn parse_shortcut(spec: &str) -> Option<(Modifiers, Code)> {
+    let parts: Vec<&str> = spec.split('+').collect();
+    if parts.is_empty() {
+        return None;
+    }
+    let mut mods = Modifiers::empty();
+    for m in &parts[..parts.len() - 1] {
+        let m = m.trim().to_ascii_lowercase();
+        match m.as_str() {
+            "ctrl" | "control" | "commandorcontrol" | "cmdorctrl" => {
+                #[cfg(target_os = "macos")]
+                { mods |= Modifiers::SUPER; }
+                #[cfg(not(target_os = "macos"))]
+                { mods |= Modifiers::CONTROL; }
+            }
+            "alt" | "option" => mods |= Modifiers::ALT,
+            "shift" => mods |= Modifiers::SHIFT,
+            "cmd" | "command" | "super" | "meta" => mods |= Modifiers::SUPER,
+            _ => return None,
+        }
+    }
+
+    let key = parts.last()?.trim().to_ascii_uppercase();
+    let code = match key.as_str() {
+        "A" => Code::KeyA, "B" => Code::KeyB, "C" => Code::KeyC, "D" => Code::KeyD,
+        "E" => Code::KeyE, "F" => Code::KeyF, "G" => Code::KeyG, "H" => Code::KeyH,
+        "I" => Code::KeyI, "J" => Code::KeyJ, "K" => Code::KeyK, "L" => Code::KeyL,
+        "M" => Code::KeyM, "N" => Code::KeyN, "O" => Code::KeyO, "P" => Code::KeyP,
+        "Q" => Code::KeyQ, "R" => Code::KeyR, "S" => Code::KeyS, "T" => Code::KeyT,
+        "U" => Code::KeyU, "V" => Code::KeyV, "W" => Code::KeyW, "X" => Code::KeyX,
+        "Y" => Code::KeyY, "Z" => Code::KeyZ,
+        "0" => Code::Digit0, "1" => Code::Digit1, "2" => Code::Digit2, "3" => Code::Digit3,
+        "4" => Code::Digit4, "5" => Code::Digit5, "6" => Code::Digit6, "7" => Code::Digit7,
+        "8" => Code::Digit8, "9" => Code::Digit9,
+        "F1" => Code::F1, "F2" => Code::F2, "F3" => Code::F3, "F4" => Code::F4,
+        "F5" => Code::F5, "F6" => Code::F6, "F7" => Code::F7, "F8" => Code::F8,
+        "F9" => Code::F9, "F10" => Code::F10, "F11" => Code::F11, "F12" => Code::F12,
+        _ => return None,
+    };
+    Some((mods, code))
+}
+
+/// 判断触发的是哪条默认热键（按 (modifiers, key) 匹配，不依赖 id）。
+pub fn match_hotkey_action(shortcut: &Shortcut) -> Option<&'static str> {
+    for (action, spec) in DEFAULT_HOTKEYS {
+        if let Some((mods, code)) = parse_shortcut(spec) {
+            if shortcut.mods == mods && shortcut.key == code {
+                return Some(action);
+            }
+        }
+    }
+    None
+}
+
+/// 注册 / 重注册一批热键。
+pub fn apply_hotkeys(app: &tauri::AppHandle, list: &[(&str, &str)]) {
+    let gs = app.global_shortcut();
+    // 先注销本应用注册过的所有热键，再按新配置注册（等价于 Windows 侧 Unregister 重放）
+    let _ = gs.unregister_all();
+    for (_action, spec) in list {
+        let Some((mods, code)) = parse_shortcut(spec) else { continue };
+        let shortcut = Shortcut::new(Some(mods), code);
+        // 被系统 / 其它应用占用时静默失败：不弹窗，仅该条热键不可用
+        let _ = gs.register(shortcut);
+    }
 }
 
 // ===========================================================================

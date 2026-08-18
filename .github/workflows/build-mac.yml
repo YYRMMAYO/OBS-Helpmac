@@ -3,7 +3,12 @@ name: Build macOS
 on:
   push:
     branches: [main]
+    # 打 tag（如 1.5.0 / v1.5.0）时额外发布 GitHub Release 并上传 dmg
+    tags: ['*']
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -58,3 +63,34 @@ jobs:
             OBS_Helper.Mac/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             OBS_Helper.Mac/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
           if-no-files-found: error
+
+  # 打 tag 后把两个架构的 dmg 汇总发布到 GitHub Release
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: OBS 排障助手 ${{ github.ref_name }}
+          body: |
+            ## OBS 排障助手（macOS 版）${{ github.ref_name }}
+
+            - **aarch64**：Apple Silicon（M1 / M2 / M3 及更新）
+            - **x86_64**：Intel Mac
+
+            ### 安装
+            下载对应架构的 .dmg，双击挂载后把「OBS 排障助手」拖入「应用程序」。
+            首次打开如提示未受信任，请在「系统设置 → 隐私与安全性」中点击「仍要打开」。
+
+            > 未签名构建，Gatekeeper 可能拦截；请按提示放行。
+          files: |
+            dist/*.dmg
+          draft: true

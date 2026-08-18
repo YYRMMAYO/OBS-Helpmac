@@ -117,6 +117,28 @@
     window.obsHelperHost = detect();
 
     /* -------------------------------------------------------------------
+     * Shell 动作监听（托盘菜单 / 全局热键 / 单实例唤起）。
+     * Rust 宿主通过 Tauri 事件 `shell:action` 推送动作（toggleRecord /
+     * toggleStream / toggleVCam / toggleMini / toggleMain / showMain / quit），
+     * 这里转交给 C# 侧 ShellCommandService 执行对应的 OBS 操作。
+     * Windows（WebView2）与浏览器环境无此事件通道，注册为空操作即可。
+     * ----------------------------------------------------------------- */
+    window.obsHelperShellAction = function (dotNetRef, methodName) {
+        try {
+            var t = window.__TAURI__;
+            if (t && t.event && typeof t.event.listen === 'function') {
+                t.event.listen('shell:action', function (e) {
+                    var action = e && e.payload && e.payload.action;
+                    if (action && dotNetRef) {
+                        dotNetRef.invokeMethodAsync(methodName || 'OnShellAction', action)
+                            .catch(function () { /* C# 侧异常不影响渲染 */ });
+                    }
+                }).catch(function () { /* 监听失败静默：托盘/热键动作不可用但不崩溃 */ });
+            }
+        } catch (err) { /* 非 Tauri 环境：无 Shell 事件通道 */ }
+    };
+
+    /* -------------------------------------------------------------------
      * 无障碍与外观：由 C# 设置服务调用，作用在 <html> 根元素上。
      * 主题 / 字号 / 高对比度 都通过 data-* 属性驱动 CSS 变量，避免内联样式。
      * ----------------------------------------------------------------- */

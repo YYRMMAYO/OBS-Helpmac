@@ -1,4 +1,5 @@
 ﻿@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 
 <Router AppAssembly="@typeof(App).Assembly">
     @code {
@@ -6,9 +7,25 @@
         // Blazor 路由按 URL 路径匹配 @page 路由，而 /index.html 不是一个有效路由，
         // 会落入 <NotFound> 分支（首页显示“404 没有找到这个页面”）。
         // 这里在组件初始化时检测该路径并重定向到根路径 “/”，让路由命中首页。
-        protected override void OnInitialized()
+        protected override async Task OnInitializedAsync()
         {
             var uri = NavigationManager.Uri;
+
+            // 小窗窗口（Tauri 注入 window.__OBS_MINI__ 标记）：直接跳到 /mini 渲染 MiniPanel
+            try
+            {
+                var isMini = await JSRuntime.InvokeAsync<bool>("eval", "!!window.__OBS_MINI__");
+                if (isMini)
+                {
+                    NavigationManager.NavigateTo("/mini", forceLoad: false);
+                    return;
+                }
+            }
+            catch (Exception)
+            {
+                // JS 互操作不可用（极早期）：按普通窗口处理
+            }
+
             if (uri.EndsWith("index.html", StringComparison.OrdinalIgnoreCase))
             {
                 NavigationManager.NavigateTo("/");

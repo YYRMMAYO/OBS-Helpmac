@@ -31,11 +31,13 @@ public sealed class ObsConfigReport
 /// <summary>
 /// OBS 配置文件扫描器（方向 B）。
 ///
-/// 宿主已开放 <c>config.list</c> / <c>config.read</c>，限定在 <c>%AppData%/obs-studio</c> 内，
-/// 因此这里读取的是用户本机真实配置而非日志反推：
+/// 宿主已开放 <c>config.list</c> / <c>config.read</c>，限定在 OBS 数据目录
+/// （Windows: %AppData%/obs-studio；macOS: ~/Library/Application Support/obs-studio）内，
+/// 因此这里读取的是用户本机真实配置而非日志反推。OBS 两端目录布局一致：
 /// <list type="bullet">
-///   <item>根 <c>basic.ini</c> 与每个 <c>profiles/&lt;名称&gt;/basic.ini</c>：录制格式、音频采样率、编码器、码率；</item>
-///   <item>每个 <c>sceneCollections/&lt;名称&gt;/*.json</c>：检测同一场景内是否放了多个游戏捕获源。</item>
+///   <item>根 <c>basic.ini</c> 与每个 <c>basic/profiles/&lt;名称&gt;/basic.ini</c>：
+///       录制格式、音频采样率、编码器、码率；</item>
+///   <item><c>basic/scenes/&lt;集合名&gt;.json</c>：检测同一场景内是否放了多个游戏捕获源。</item>
 /// </list>
 /// 全程容错：任一步解析失败只跳过该项，不影响其它检查。
 /// </summary>
@@ -53,27 +55,25 @@ public sealed class ObsConfigScanner
         var rootIni = await _host.ReadObsConfigAsync("basic.ini");
         if (rootIni is not null) AnalyzeIni(report, rootIni, "basic.ini");
 
-        var profiles = await _host.ListObsConfigAsync("profiles");
+        var profiles = await _host.ListObsConfigAsync("basic/profiles");
         foreach (var prof in profiles.Where(e => e.IsDir))
         {
-            var ini = await _host.ReadObsConfigAsync($"profiles/{prof.Name}/basic.ini");
-            if (ini is not null) AnalyzeIni(report, ini, $"profiles/{prof.Name}/basic.ini");
+            var ini = await _host.ReadObsConfigAsync($"basic/profiles/{prof.Name}/basic.ini");
+            if (ini is not null) AnalyzeIni(report, ini, $"basic/profiles/{prof.Name}/basic.ini");
         }
 
-        // 2) 场景集合：检测多游戏捕获同场景
-        var collections = await _host.ListObsConfigAsync("sceneCollections");
-        foreach (var col in collections.Where(e => e.IsDir))
+        // 2) 场景集合：检测多游戏捕获同场景。
+        //    注意：场景集合是 basic/scenes 下的一个个 .json 文件（文件名即集合名），
+        //    不是子目录（sceneCollections 只是 obs-websocket API 的返回字段名）。
+        var sceneFiles = await _host.ListObsConfigAsync("basic/scenes");
+        foreach (var f in sceneFiles.Where(x => !x.IsDir && x.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
         {
-            var files = await _host.ListObsConfigAsync($"sceneCollections/{col.Name}");
-            foreach (var f in files.Where(x => !x.IsDir && x.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
-            {
-                var json = await _host.ReadObsConfigAsync($"sceneCollections/{col.Name}/{f.Name}");
-                if (json is not null) AnalyzeSceneCollection(report, json, f.Name);
-            }
+            var json = await _host.ReadObsConfigAsync($"basic/scenes/{f.Name}");
+            if (json is not null) AnalyzeSceneCollection(report, json, f.Name);
         }
 
         report.Available = true;
-        report.Source = "basic.ini / profiles / sceneCollections";
+        report.Source = "basic.ini / basic/profiles / basic/scenes";
         return report;
     }
 

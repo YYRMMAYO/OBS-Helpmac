@@ -76,6 +76,45 @@ public sealed class HostBridge
     public bool IsAvailable => _available;
     public string Platform => _platform;
 
+    // ------------------------------------------------------------ Shell 动作
+    // 托盘 / 全局热键 / 单实例由 Rust 宿主通过 Tauri 事件 `shell:action` 推送，
+    // hostbridge.js 监听到后回调到这里；动作在语义上需要 OBS 连接，因此由
+    // ShellCommandService 订阅并执行（ObsConnectionService 在前端侧）。
+    private DotNetObjectReference<HostBridge>? _shellRef;
+    private bool _shellListening;
+
+    /// <summary>Shell 动作处理器（由 ShellCommandService 注册）。</summary>
+    public Func<string, Task>? ShellActionHandler { get; set; }
+
+    /// <summary>启动 Tauri 事件监听；无宿主环境静默跳过。</summary>
+    public async Task StartShellListenerAsync()
+    {
+        if (_shellListening || !await ProbeAsync()) return;
+        _shellListening = true;
+        _shellRef ??= DotNetObjectReference.Create(this);
+        try
+        {
+            await _js.InvokeVoidAsync("obsHelperShellAction", _shellRef, "OnShellAction");
+        }
+        catch (Exception)
+        {
+            // 非 Tauri 环境（浏览器 / Windows WebView2）：无 Shell 事件通道，忽略
+        }
+    }
+
+    /// <summary>hostbridge.js 回调：收到一个 Shell 动作字符串。</summary>
+    [JSInvokable]
+    public void OnShellAction(string action)
+    {
+        var handler = ShellActionHandler;
+        if (handler is null) return;
+        _ = Task.Run(async () =>
+        {
+            try { await handler(action); }
+            catch (Exception) { /* Shell 动作失败不影响其它逻辑 */ }
+        });
+    }
+
     /// <summary>探测宿主是否存在。多次调用只会真正探测一次。</summary>
     public async Task<bool> ProbeAsync()
     {
@@ -448,6 +487,105 @@ public sealed class HostBridge
             return false;
         }
     }
+
+    // ------------------------------------------------------------ 小窗 / 主窗口
+
+    /// <summary>呼出 / 收起迷你小窗。</summary>
+    public async Task ToggleMiniWindowAsync()
+    {
+        try { await InvokeAsync("mini.toggle"); } catch (Exception) { }
+    }
+
+    /// <summary>显示主窗口。</summary>
+    public async Task ShowMainWindowAsync()
+    {
+        try { await InvokeAsync("window.showMain"); } catch (Exception) { }
+    }
+
+    /// <summary>隐藏主窗口。</summary>
+    public async Task HideMainWindowAsync()
+    {
+        try { await InvokeAsync("window.hideMain"); } catch (Exception) { }
+    }
+
+    /// <summary>显示 / 隐藏主窗口（全局热键 Ctrl+Alt+O 用）。</summary>
+    public async Task ToggleMainWindowAsync()
+    {
+        try { await InvokeAsync("window.toggleMain"); } catch (Exception) { }
+    }
+
+    /// <summary>彻底退出应用（托盘菜单「退出」用）。</summary>
+    public async Task QuitAppAsync()
+    {
+        try { await InvokeAsync("app.quit"); } catch (Exception) { }
+    }
+
+    // ------------------------------------------------------------ 托盘状态 / 偏好
+
+    /// <summary>把 OBS 连接与输出状态上报给宿主，刷新托盘菜单文案与 ToolTip。</summary>
+    public async Task ReportTrayStateAsync(bool connected, bool recording, bool streaming, bool vcam)
+    {
+        try { await InvokeAsync("shell.trayState", new { connected, recording, streaming, vcam }); } catch (Exception) { }
+    }
+
+    /// <summary>读取桌面壳偏好（当前为「关闭到托盘」开关）。</summary>
+    public async Task<HostShellPrefs?> GetShellPrefsAsync()
+    {
+        try
+        {
+            var json = await InvokeAsync("shell.getPrefs");
+            return JsonSerializer.Deserialize<HostShellPrefs>(json, JsonOpts);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>保存桌面壳偏好。</summary>
+    public async Task<bool> SetShellPrefsAsync(bool closeToTray)
+    {
+        try
+        {
+            await InvokeAsync("shell.setPrefs", new { closeToTray });
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    // ------------------------------------------------------------ 前台应用（场景自动切换）
+
+    /// <summary>查询当前前台应用（macOS：lsappinfo front 解析 bundle id）。</summary>
+    public async Task<HostForegroundApp?> GetForegroundAppAsync()
+    {
+        try
+        {
+            var json = await InvokeAsync("system.foregroundApp");
+            return JsonSerializer.Deserialize<HostForegroundApp>(json, JsonOpts);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+}
+
+/// <summary>桌面壳偏好（对应 Windows 侧 ShellSettings 的桌面部分）。</summary>
+public sealed class HostShellPrefs
+{
+    /// <summary>关闭主窗口时是否最小化到托盘（而非退出）。</summary>
+    public bool CloseToTray { get; set; }
+}
+
+/// <summary>当前前台应用信息（场景自动切换的匹配对象）。</summary>
+public sealed class HostForegroundApp
+{
+    public string BundleId { get; set; } = "";
+    /// <summary>bundle id 最后一段（如 com.apple.Safari → Safari），供用户友好的规则匹配。</summary>
+    public string Name { get; set; } = "";
 }
 
 /// <summary>OBS 配置目录定位结果。</summary>

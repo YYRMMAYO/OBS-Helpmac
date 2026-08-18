@@ -1,6 +1,6 @@
 [package]
 name = "obs-helper-mac"
-version = "1.4.3"
+version = "1.5.0"
 description = "OBS 排障助手 macOS 宿主 (Tauri v2)"
 authors = ["OBS Helper"]
 license = "MIT"
@@ -11,7 +11,8 @@ rust-version = "1.77.2"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2" }
+# tray-icon：系统托盘（菜单栏图标），等价于 Windows 侧 WinForms NotifyIcon
+tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 机密加密落盘：macOS 走系统钥匙串（等价于 Windows 侧的 DPAPI）。
@@ -22,6 +23,12 @@ keyring = { version = "3", features = ["apple-native"] }
 zip = "2"
 # 原生文件对话框（保存 / 打开 / 选择目录），官方插件，跨平台一致
 tauri-plugin-dialog = "2"
+# 全局热键（等价于 Windows 侧 RegisterHotKey / WM_HOTKEY）
+tauri-plugin-global-shortcut = "2"
+# 单实例（等价于 Windows 侧 Mutex + EventWaitHandle 唤起已有窗口）
+tauri-plugin-single-instance = "2"
+# 系统通知（托盘状态翻转 / 磁盘预警等）
+tauri-plugin-notification = "2"
 
 [profile.release]
 panic = "abort"

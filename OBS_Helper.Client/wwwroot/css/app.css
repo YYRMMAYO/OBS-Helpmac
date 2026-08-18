@@ -604,3 +604,43 @@ body { font-size: 1rem; line-height: 1.6; }
 .manual-row .search-input { flex: 1; min-width: 220px; }
 .check-label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
 .backup-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ============================================================
+ * 桌面 Shell：托盘设置 / 场景自动切换 / 定时停止 / 小窗
+ * ============================================================ */
+.hotkey-list { flex: 1; text-align: right; line-height: 1.7; }
+
+.rule-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.rule-row { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.rule-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--brand); flex: 0 0 auto; }
+.rule-display { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-editor { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.rule-editor .search-input { flex: 1; min-width: 140px; }
+
+.timer-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.timer-item { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.timer-kind { font-weight: 600; }
+.timer-remaining { color: var(--brand); font-variant-numeric: tabular-nums; }
+
+.btn.tiny { padding: 3px 8px; font-size: 12px; }
+
+/* —— 小窗（MiniPanel）—— */
+.mini-shell { height: 100vh; overflow: hidden; }
+.mini-panel { display: flex; flex-direction: column; height: 100vh; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; -webkit-user-select: none; user-select: none; }
+.mini-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--surface-2); border-bottom: 1px solid var(--border); cursor: grab; }
+.mini-title { font-weight: 600; font-size: 13px; }
+.mini-status { margin-left: auto; font-size: 12px; }
+.mini-status.ok { color: var(--ok, #2e9e44); }
+.mini-status.busy { color: var(--warn, #b7791f); }
+.mini-status.fail { color: var(--danger, #d64545); }
+.mini-status.off { color: var(--muted); }
+.mini-close { border: none; background: transparent; color: var(--muted); font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.mini-close:hover { background: var(--surface); color: var(--text); }
+.mini-actions { display: flex; gap: 8px; padding: 12px 10px; flex: 1; align-items: stretch; }
+.mini-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 10px; cursor: pointer; padding: 6px 4px; }
+.mini-btn:hover:not(:disabled) { border-color: var(--brand); }
+.mini-btn:disabled { opacity: .45; cursor: not-allowed; }
+.mini-btn.on { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, var(--surface-2)); }
+.mini-btn-icon { font-size: 18px; line-height: 1; }
+.mini-btn-label { font-size: 11px; line-height: 1.2; text-align: center; }
+.mini-hint { margin: 0; padding: 0 10px 8px; font-size: 11px; color: var(--muted); text-align: center; }

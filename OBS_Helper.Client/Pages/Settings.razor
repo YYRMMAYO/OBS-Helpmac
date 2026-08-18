@@ -2,8 +2,14 @@
 @inject AiSettingsService AiSettings
 @inject HostBridge Host
 @inject AppearanceService Appearance
+@inject ObsConnectionService Conn
+@inject SceneAutoSwitcherService AutoSwitch
+@inject ControlTimerService Timer
 @using OBS_Helper.Client.Services.Host
 @using OBS_Helper.Client.Services.Ai
+@using OBS_Helper.Client.Services.Obs
+@using OBS_Helper.Client.Services.Shell
+@implements IDisposable
 
 <PageTitle>设置</PageTitle>
 
@@ -109,7 +115,7 @@
         }
         @if (_updateAvailable)
         {
-            <a class="btn btn-accent" href="https://github.com/YYRMMAYO/OBS-Helpmac/releases" target="_blank" rel="noopener noreferrer" role="button">⬇️ 前往下载新版本</a>
+            <a class="btn btn-accent" href="#" @onclick="OpenReleases" @onclick:preventDefault role="button">⬇️ 前往下载新版本</a>
         }
         <div class="template-actions" style="margin-top:8px">
             <button class="btn btn-ghost small" type="button" disabled="@_checking" @onclick="CheckUpdate">检查更新</button>
@@ -117,10 +123,91 @@
     </section>
 
     <section class="block">
+        <h3>托盘与快捷键</h3>
+        <p class="muted small">桌面壳能力：关闭主窗口时最小化到托盘（而非退出），以及全局快捷键随时控制 OBS。</p>
+
+        <label class="set-row toggle-row">
+            <span class="set-label">关闭到托盘</span>
+            <input type="checkbox" checked="@_closeToTray" @onchange="ToggleCloseToTray" />
+        </label>
+        <p class="muted small">勾选后点主窗口 ✕ 只隐藏到菜单栏托盘，需从托盘菜单「退出」才真正关闭应用。</p>
+
+        <div class="set-row">
+            <span class="set-label">全局快捷键</span>
+            <span class="muted small hotkey-list">@HotkeySummary</span>
+        </div>
+        <p class="muted small">快捷键在主窗口隐藏时同样生效。可在 macOS 系统设置 → 键盘 → 快捷键中检查是否被占用。</p>
+    </section>
+
+    <section class="block">
+        <h3>场景自动切换</h3>
+        <p class="muted small">当前台切换到指定应用时自动切换 OBS 场景（macOS 按应用名匹配）。</p>
+
+        <label class="set-row toggle-row">
+            <span class="set-label">启用场景自动切换</span>
+            <input type="checkbox" checked="@AutoSwitch.Settings.Enabled" @onchange="ToggleAutoSwitch" />
+        </label>
+
+        <div class="rule-list">
+            @foreach (var rule in AutoSwitch.Settings.Rules)
+            {
+                <div class="rule-row">
+                    <input type="checkbox" checked="@rule.Enabled" @onchange="e => SetRuleEnabled(rule, e)" title="启用" />
+                    <span class="rule-display">@rule.Display</span>
+                    <button class="btn btn-ghost tiny" type="button" @onclick="() => RemoveRule(rule)">删除</button>
+                </div>
+            }
+            @if (AutoSwitch.Settings.Rules.Count == 0)
+            {
+                <p class="muted small">还没有规则。添加一条：匹配前台应用名（如 Safari / 浏览器）→ 自动切到对应场景。</p>
+            }
+        </div>
+
+        <div class="rule-editor">
+            <input class="search-input" @bind="_rulePattern" placeholder="应用名关键词，如 Safari" />
+            <label class="check-row">
+                <input type="checkbox" @bind="_ruleRegex" /> <span>正则</span>
+            </label>
+            <input class="search-input" @bind="_ruleScene" placeholder="目标场景名（需先连接 OBS）" />
+            <button class="btn btn-accent small" type="button" @onclick="AddRule" disabled="@string.IsNullOrWhiteSpace(_rulePattern) || string.IsNullOrWhiteSpace(_ruleScene)">添加规则</button>
+        </div>
+        @if (Conn.IsConnected && Conn.Scenes.Count > 0)
+        {
+            <p class="muted small">当前场景：<b>@Conn.CurrentScene</b> · 共 @Conn.Scenes.Count 个。</p>
+        }
+    </section>
+
+    <section class="block">
+        <h3>定时停止</h3>
+        <p class="muted small">给录制 / 推流设置倒计时，到点自动停止（例如直播定时收尾）。</p>
+
+        <div class="timer-row">
+            @foreach (var item in Timer.Items)
+            {
+                <div class="timer-item">
+                    <span class="timer-kind">@item.KindText</span>
+                    <span class="timer-remaining">@item.RemainingText</span>
+                    <button class="btn btn-ghost tiny" type="button" @onclick="() => CancelTimer(item.Kind)">取消</button>
+                </div>
+            }
+        </div>
+
+        <div class="rule-editor">
+            <select class="search-input" @bind="_timerKind">
+                <option value="record">录制</option>
+                <option value="stream">推流</option>
+            </select>
+            <input class="search-input" type="number" min="1" max="300" @bind="_timerMinutes" />
+            <span class="muted small">分钟</span>
+            <button class="btn btn-accent small" type="button" @onclick="AddTimer" disabled="@(_timerMinutes is < 1 or > 300)">设定</button>
+        </div>
+    </section>
+
+    <section class="block">
         <h3>关于</h3>
         <p class="muted small">OBS 直播排障助手 · 版本 <span>@_appVersion</span></p>
         <p class="muted small">离线优先的本地排障工具：UI 与数据随包发布，默认不发起任何网络请求。仅在「AI 诊断引擎」中手动开启云端大模型后，才会由桌面壳代发 HTTPS 请求，密钥经系统密钥库加密保存。</p>
-        <p class="muted small">官方文档：<a href="https://obsproject.com/zh-cn/docs" target="_blank" rel="noopener noreferrer">obsproject.com/zh-cn/docs</a></p>
+        <p class="muted small">官方文档：<a href="#" @onclick="OpenDocs" @onclick:preventDefault>obsproject.com/zh-cn/docs</a></p>
     </section>
 </div>
 
@@ -136,6 +223,19 @@
     private bool _updateAvailable;
     private bool _checking;
 
+    // —— 托盘 / 快捷键 ——
+    private bool _closeToTray = true;
+    private string HotkeySummary => "Ctrl+Alt+R 录制 · Ctrl+Alt+S 推流 · Ctrl+Alt+C 虚拟摄像头 · Ctrl+Alt+M 小窗 · Ctrl+Alt+O 主窗口";
+
+    // —— 场景自动切换规则编辑 ——
+    private string _rulePattern = "";
+    private bool _ruleRegex;
+    private string _ruleScene = "";
+
+    // —— 定时停止 ——
+    private string _timerKind = "record";
+    private int _timerMinutes = 30;
+
     protected override async Task OnInitializedAsync()
     {
         await AiSettings.LoadAsync();
@@ -148,7 +248,84 @@
             var env = await Host.GetEnvironmentAsync();
             if (!string.IsNullOrEmpty(env.AppVersion)) _appVersion = env.AppVersion;
         }
+
+        // 托盘 / 快捷键 / 自动切换 / 定时器
+        var prefs = await Host.GetShellPrefsAsync();
+        if (prefs is not null) _closeToTray = prefs.CloseToTray;
+        await AutoSwitch.LoadAsync();
+        await Timer.LoadAsync();
+        AutoSwitch.Changed += OnShellStateChanged;
+        Timer.Changed += OnShellStateChanged;
+        Conn.StateChanged += OnShellStateChanged;
     }
+
+    public void Dispose()
+    {
+        AutoSwitch.Changed -= OnShellStateChanged;
+        Timer.Changed -= OnShellStateChanged;
+        Conn.StateChanged -= OnShellStateChanged;
+    }
+
+    private void OnShellStateChanged() => _ = InvokeAsync(StateHasChanged);
+
+    // ------------------------------------------------------------ 托盘
+
+    private async Task ToggleCloseToTray(ChangeEventArgs e)
+    {
+        _closeToTray = e.Value is bool b && b;
+        await Host.SetShellPrefsAsync(_closeToTray);
+    }
+
+    private Task OpenReleases() => Host.OpenExternalAsync("https://github.com/YYRMMAYO/OBS-Helpmac/releases");
+    private Task OpenDocs() => Host.OpenExternalAsync("https://obsproject.com/zh-cn/docs");
+
+    // ------------------------------------------------------------ 自动切换
+
+    private async Task ToggleAutoSwitch(ChangeEventArgs e)
+    {
+        var enabled = e.Value is bool b && b;
+        await AutoSwitch.SetEnabledAsync(enabled);
+    }
+
+    private void SetRuleEnabled(AutoSwitchRule rule, ChangeEventArgs e)
+    {
+        rule.Enabled = e.Value is bool b && b;
+        _ = AutoSwitch.SaveAsync();
+    }
+
+    private async Task RemoveRule(AutoSwitchRule rule)
+    {
+        AutoSwitch.Settings.Rules.Remove(rule);
+        await AutoSwitch.SaveAsync();
+        StateHasChanged();
+    }
+
+    private async Task AddRule()
+    {
+        AutoSwitch.Settings.Rules.Add(new AutoSwitchRule
+        {
+            Enabled = true,
+            Pattern = _rulePattern.Trim(),
+            UseRegex = _ruleRegex,
+            SceneName = _ruleScene.Trim()
+        });
+        _rulePattern = "";
+        _ruleRegex = false;
+        _ruleScene = "";
+        await AutoSwitch.SaveAsync();
+        StateHasChanged();
+    }
+
+    // ------------------------------------------------------------ 定时停止
+
+    private async Task CancelTimer(string kind) => await Timer.CancelAsync(kind);
+
+    private async Task AddTimer()
+    {
+        await Timer.StartTimerAsync(_timerKind, _timerMinutes);
+    }
+
+    // ------------------------------------------------------------ 更新 / AI
 
     private async Task CheckUpdate()
     {

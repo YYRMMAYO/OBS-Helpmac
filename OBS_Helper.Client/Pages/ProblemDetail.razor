@@ -1,6 +1,8 @@
 @page "/problem/{id}"
 @inject ProblemService ProblemService
 @inject BookmarkService BookmarkService
+@inject HostBridge HostBridge
+@using OBS_Helper.Client.Services.Host
 
 @if (problem is not null)
 {
@@ -80,7 +82,7 @@
                     {
                         @if (IsSafeUrl(l.Url))
                         {
-                            <li><a class="ext-link" href="@l.Url" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">@l.Title <span class="ext">↗</span></a></li>
+                            <li><a class="ext-link" href="#" @onclick="() => OpenLink(l.Url)" @onclick:preventDefault>@l.Title <span class="ext">↗</span></a></li>
                         }
                         else
                         {
@@ -155,4 +157,7 @@ else
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
         return uri.Scheme is "http" or "https";
     }
+
+    /// <summary>打开外链：经宿主用系统浏览器打开（target=_blank 会被导航白名单拦截）。</summary>
+    private Task OpenLink(string url) => HostBridge.OpenExternalAsync(url);
 }

@@ -1,0 +1,108 @@
+@page "/mini"
+@layout MiniLayout
+@implements IDisposable
+@inject ObsConnectionService Conn
+@inject ObsSettingsService Settings
+@inject HostBridge Host
+@using OBS_Helper.Client.Models.Obs
+@using OBS_Helper.Client.Services.Obs
+@using OBS_Helper.Client.Services.Host
+
+<PageTitle>OBS 小窗</PageTitle>
+
+<div class="mini-panel" data-tauri-drag-region>
+    <div class="mini-head" data-tauri-drag-region>
+        <span class="mini-title">🎛 OBS 小窗</span>
+        <span class="mini-status @StatusClass">@StatusText</span>
+        <button class="mini-close" type="button" title="隐藏小窗" @onclick="HideMini" data-tauri-drag-region>✕</button>
+    </div>
+
+    <div class="mini-actions" data-tauri-drag-region>
+        <button class="mini-btn @(Conn.RecordStatus.Active ? "on" : "")" type="button"
+                disabled="@(!Conn.IsConnected)" @onclick="ToggleRecord" title="录制开关">
+            <span class="mini-btn-icon">🔴</span>
+            <span class="mini-btn-label">@(Conn.RecordStatus.Active ? (Conn.RecordStatus.Paused ? "已暂停" : "停止录制") : "录制")</span>
+        </button>
+        <button class="mini-btn @(Conn.StreamStatus.Active ? "on" : "")" type="button"
+                disabled="@(!Conn.IsConnected)" @onclick="ToggleStream" title="推流开关">
+            <span class="mini-btn-icon">📡</span>
+            <span class="mini-btn-label">@(Conn.StreamStatus.Active ? "停止推流" : "推流")</span>
+        </button>
+        <button class="mini-btn @(Conn.VirtualCamStatus.Active ? "on" : "")" type="button"
+                disabled="@(!Conn.IsConnected)" @onclick="ToggleVCam" title="虚拟摄像头开关">
+            <span class="mini-btn-icon">🎥</span>
+            <span class="mini-btn-label">@(Conn.VirtualCamStatus.Active ? "关闭虚拟摄" : "虚拟摄像头")</span>
+        </button>
+    </div>
+
+    @if (!Conn.IsConnected)
+    {
+        <p class="mini-hint">未连接 OBS（点击重试）</p>
+    }
+    else
+    {
+        <p class="mini-hint">已连接 @Settings.Current.Host:@Settings.Current.Port · 拖拽移动 · 始终置顶</p>
+    }
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Conn.StateChanged += OnConnChanged;
+        await Settings.LoadAsync();
+        // 小窗是独立 WebView 实例：需要自己连一次 OBS（与主窗口共享 localStorage 设置 + Keychain 密码）
+        if (Settings.Current.AutoConnect && !Conn.IsConnected)
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(300);
+                try { await Conn.ConnectAsync(); } catch (Exception) { }
+            });
+        }
+    }
+
+    private void OnConnChanged() => InvokeAsync(StateHasChanged);
+
+    private string StatusClass => Conn.State switch
+    {
+        ObsConnectionState.Connected => "ok",
+        ObsConnectionState.Connecting or ObsConnectionState.Authenticating or ObsConnectionState.Reconnecting => "busy",
+        ObsConnectionState.Failed => "fail",
+        _ => "off"
+    };
+
+    private string StatusText => Conn.State switch
+    {
+        ObsConnectionState.Connected => "已连接",
+        ObsConnectionState.Connecting => "连接中…",
+        ObsConnectionState.Authenticating => "鉴权中…",
+        ObsConnectionState.Reconnecting => "重连中…",
+        ObsConnectionState.Failed => "连接失败",
+        _ => "未连接"
+    };
+
+    private Task ToggleRecord()
+    {
+        if (Conn.RecordStatus.Active) return Conn.StopRecordAsync();
+        return Conn.StartRecordAsync();
+    }
+
+    private Task ToggleStream()
+    {
+        if (Conn.StreamStatus.Active) return Conn.StopStreamAsync();
+        return Conn.StartStreamAsync();
+    }
+
+    private Task ToggleVCam()
+    {
+        if (Conn.VirtualCamStatus.Active) return Conn.StopVirtualCamAsync();
+        return Conn.StartVirtualCamAsync();
+    }
+
+    private async Task HideMini()
+    {
+        await Host.ToggleMiniWindowAsync();
+    }
+
+    public void Dispose() => Conn.StateChanged -= OnConnChanged;
+}

@@ -6,6 +6,7 @@ using OBS_Helper.Client.Services.Ai;
 using OBS_Helper.Client.Services.Host;
 using OBS_Helper.Client.Services.Obs;
 using OBS_Helper.Client.Services.ObsConfig;
+using OBS_Helper.Client.Services.Shell;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -48,5 +49,13 @@ builder.Services.AddSingleton<DiagnosticOrchestrator>();
 // —— 新增：场景模板 + OBS 配置管理（Windows 版功能同步） ——
 builder.Services.AddSingleton<SceneTemplateService>();
 builder.Services.AddSingleton<ObsConfigService>();
+
+// —— 新增：桌面 Shell 控制层（托盘 / 全局热键 / 小窗 / 场景自动切换 / 定时停止）——
+// ShellCommandService 把宿主托盘 / 热键动作分发到 ObsConnectionService，并回传托盘状态。
+builder.Services.AddSingleton<ShellCommandService>();
+// 场景自动切换：前端轮询宿主 system.foregroundApp，按规则切场景。
+builder.Services.AddSingleton<SceneAutoSwitcherService>();
+// 定时停止录制 / 推流。
+builder.Services.AddSingleton<ControlTimerService>();
 
 await builder.Build().RunAsync();

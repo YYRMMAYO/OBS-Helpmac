@@ -224,11 +224,11 @@
     </section>
 
     <section class="diag-card">
-        <h3>② Windows 配置与日志</h3>
+        <h3>② 配置与日志</h3>
         <ul class="kv">
-            <li><b>配置目录：</b><code>%AppData%\obs-studio</code></li>
-            <li><b>场景备份：</b><code>%AppData%\obs-studio\sceneCollections</code></li>
-            <li><b>日志分析：</b>在 OBS 中 帮助 → 日志文件 → 上传日志，或访问 <a href="https://obsproject.com/analyzer/" target="_blank" rel="noopener">OBS 官方日志分析器</a></li>
+            <li><b>配置目录：</b><code>@ConfigDirText</code></li>
+            <li><b>场景集合：</b><code>@ScenesDirText</code></li>
+            <li><b>日志分析：</b>在 OBS 中 帮助 → 日志文件 → 上传日志，或打开 <a href="#" @onclick="OpenAnalyzer" @onclick:preventDefault>OBS 官方日志分析器</a></li>
         </ul>
         <p class="muted">把分析结果（URL 或关键警告）对照本应用的「崩溃 / 兼容性」分类排查。</p>
     </section>
@@ -390,6 +390,17 @@
         "macos" => "macOS",
         _ => string.IsNullOrWhiteSpace(p) ? "未知系统" : p
     };
+
+    /// <summary>OBS 配置目录：按平台区分（Windows: %AppData%，macOS: ~/Library/Application Support）。</summary>
+    private string ConfigDirText => Host.Platform == "macos"
+        ? "~/Library/Application Support/obs-studio"
+        : "%AppData%\\obs-studio";
+
+    /// <summary>场景集合目录：OBS 两端布局一致，都在 basic/scenes 下（sceneCollections 只是 API 字段名）。</summary>
+    private string ScenesDirText => ConfigDirText + "\\basic\\scenes";
+
+    /// <summary>打开 OBS 官方日志分析器：经宿主用系统浏览器打开（target=_blank 会被导航白名单拦截）。</summary>
+    private async Task OpenAnalyzer() => await Host.OpenExternalAsync("https://obsproject.com/analyzer/");
 
     private static string DiskClass(double freeGb) => freeGb switch
     {

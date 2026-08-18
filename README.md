@@ -2,7 +2,7 @@
 
 OBS 直播排障助手 — 一款离线优先的本地排障工具，覆盖黑屏、卡顿、音画不同步、推流失败、直播间搭建等高频问题的分步解决方案，并支持一键连接 OBS、实时监控、日志分析、配置备份/恢复与场景模板。
 
-本仓库为 **macOS 版**（Tauri v2 + Blazor WebAssembly），功能与 Windows 版对齐（v1.4.x）。Windows 版（WPF 原生）维护在另一个仓库。
+本仓库为 **macOS 版**（Tauri v2 + Blazor WebAssembly），功能与 Windows 版对齐（v1.5.0）。Windows 版（WPF 原生）维护在另一个仓库。
 
 ## 功能
 
@@ -11,16 +11,21 @@ OBS 直播排障助手 — 一款离线优先的本地排障工具，覆盖黑�
 - 🩺 **智能诊断**：读取系统信息（GPU / 系统版本 / OBS 进程）、OBS 日志与配置，本地规则引擎定位问题
 - 🎛️ **OBS 控制台**：通过 obs-websocket 5.x 连接 OBS，切换场景、控制录制/推流/虚拟摄像头、音频管理
 - 📊 **系统监控**：CPU / 内存 / 网络 / 磁盘 1 秒实时曲线 + OBS 渲染帧率与丢帧
-- 🧩 **场景模板**：6 套内置直播间模板，一键落地到 OBS，或导出标准场景集合 JSON
-- 📜 **日志分析**：读取 OBS 日志（脱敏 + 31 条特征规则扫描），一键体检配置
+- 🧩 **场景模板**：内置直播间模板，一键落地到 OBS，或导出标准场景集合 JSON
+- 📜 **日志分析**：读取 OBS 日志（脱敏 + 特征规则扫描），一键体检配置
 - 🗂️ **OBS 配置管理**：备份 / 导出 / 导入（ZIP，含密钥脱敏与 Zip Slip 防护）、轻度 / 彻底重置（永不硬删，可回滚）
-- ⚙️ **设置**：AI 诊断引擎（本地离线 / 云端大模型，密钥经系统钥匙串加密保存）、外观无障碍、检查更新
+- 🖥️ **系统托盘**：菜单栏图标控制录制 / 推流 / 虚拟摄像头 / 小窗，左键单击显示主窗口
+- ⌨️ **全局快捷键**：Ctrl+Alt+R 录制 · Ctrl+Alt+S 推流 · Ctrl+Alt+C 虚拟摄像头 · Ctrl+Alt+M 小窗 · Ctrl+Alt+O 主窗口（主窗口隐藏时同样生效）
+- 🪟 **迷你小窗**：无边框置顶的录制 / 推流 / 虚拟摄像头快捷面板，可拖拽、位置记忆
+- 🔄 **场景自动切换**：前台切到指定应用时自动切换 OBS 场景（macOS 按应用名匹配，规则可编辑）
+- ⏱️ **定时停止**：给录制 / 推流设置倒计时，到点自动停止
+- ⚙️ **设置**：AI 诊断引擎（本地离线 / 云端大模型，密钥经系统钥匙串加密保存）、托盘与快捷键、外观无障碍、检查更新
 
 ## 技术栈
 
 | 层 | 技术 |
 |---|---|
-| 桌面壳 | [Tauri v2](https://tauri.app/)（Rust），宿主命令集中在 `src/host.rs` |
+| 桌面壳 | [Tauri v2](https://tauri.app/)（Rust），宿主命令集中在 `src/host.rs`，托盘 / 全局热键 / 小窗 / 单实例见 `src/main.rs` |
 | 前端 | Blazor WebAssembly（.NET 10），随包发布，默认零外网请求 |
 | OBS 通信 | obs-websocket 5.x（仅本机 127.0.0.1） |
 | 机密存储 | macOS 系统钥匙串（Keychain） |
@@ -32,14 +37,15 @@ OBS 直播排障助手 — 一款离线优先的本地排障工具，覆盖黑�
 ```
 OBS_Helper.Mac/            # macOS 桌面壳（Tauri v2）
   src-tauri/
-    src/host.rs            # 宿主命令白名单（唯一业务模块）
+    src/host.rs            # 宿主命令白名单（业务命令 + Shell 控制层）
+    src/main.rs            # 窗口 / 托盘 / 全局热键 / 小窗 / 单实例
     tauri.conf.json        # 应用配置（frontendDist 指向 Client 发布产物）
     build-mac.sh           # macOS 本地构建脚本（dotnet publish → tauri icon → tauri build）
 OBS_Helper.Client/         # 共享前端（Blazor WASM，Mac 版实际使用的 UI）
-  Pages/                   # 页面
-  Services/                # 服务（宿主桥接 / OBS 控制 / 日志分析 / AI 诊断…）
+  Pages/                   # 页面（含 MiniPanel.razor 小窗）
+  Services/                # 服务（宿主桥接 / OBS 控制 / Shell 控制 / 日志分析 / AI 诊断…）
   wwwroot/data/            # 知识库与场景模板数据
-.github/workflows/         # CI：macOS 双架构构建（aarch64 + x86_64）
+.github/workflows/         # CI：macOS 双架构构建（aarch64 + x86_64）+ GitHub Release
 ```
 
 ## 构建
