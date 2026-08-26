@@ -47,7 +47,7 @@
       <Border Classes="card" x:Name="AnalysisCard" IsVisible="False">
         <StackPanel Spacing="8">
           <TextBlock Text="日志分析结果" FontWeight="SemiBold" />
-          <ItemsControl x:Name="AnalysisList" ><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl x:Name="AnalysisList"><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <StackPanel Orientation="Horizontal" Spacing="8">

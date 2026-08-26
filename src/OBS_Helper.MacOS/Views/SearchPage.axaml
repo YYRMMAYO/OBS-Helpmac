@@ -56,7 +56,7 @@
         <Border Classes="card" x:Name="StepsCard" IsVisible="False">
           <StackPanel>
             <TextBlock Text="解决步骤" FontWeight="SemiBold" Margin="0,0,0,8" />
-            <ItemsControl x:Name="StepList" ><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl x:Name="StepList"><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <StackPanel Orientation="Horizontal" Spacing="10">

@@ -73,16 +73,31 @@ public sealed class ObsWebSocketClient : IAsyncDisposable
         _identifyTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _receiveLoop = Task.Run(() => ReceiveLoopAsync(socket, password, subscriptions, _loopCts.Token));
 
-        // 等待 Hello → Identify → Identified 全流程完成
+        // 等待 Hello → Identify → Identified 全流程完成。
+        // 用 WaitAsync 绑定取消令牌，避免 WhenAny + Task.Delay(Timeout.Infinite) 泄漏无限时器任务；
+        // 超时 / 取消路径必须释放 socket 与接收循环，否则半开连接会随重试不断累积。
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, ct);
-        var identified = _identifyTcs.Task;
-        var completed = await Task.WhenAny(identified, Task.Delay(Timeout.Infinite, linked.Token));
-        if (completed != identified)
+        try
         {
+            await _identifyTcs.Task.WaitAsync(linked.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            await DisposeSocketAsync();
             throw new TimeoutException("OBS 握手超时：已建立 TCP 连接但未收到 Identified 响应。");
         }
-        await identified; // 传播握手失败异常（如密码错误）
+        catch (OperationCanceledException)
+        {
+            await DisposeSocketAsync();
+            throw;
+        }
+        catch
+        {
+            // 握手失败（如密码错误）：同样回收连接，异常继续向上传播
+            await DisposeSocketAsync();
+            throw;
+        }
     }
 
     /// <summary>发送一条请求并等待响应。</summary>

@@ -57,6 +57,10 @@ public static class LogSanitizer
     private static readonly Regex LongToken = new(
         @"\b[A-Za-z0-9_\-]{24,}\b", RegexOptions.CultureInvariant);
 
+    // IPv6 候选串（交给 IPAddress.TryParse 严格验证后再决定是否抹除）
+    private static readonly Regex Ipv6Candidate = new(
+        @"(?<![\w:.])(?:[A-Fa-f0-9]{0,4}:){2,7}[A-Fa-f0-9]{0,4}(?![\w:])", Opts);
+
     /// <summary>这些「长串」是 OBS 日志里的正常内容，不应被当成密钥抹掉。</summary>
     private static readonly string[] TokenAllowList =
     {
@@ -92,14 +96,15 @@ public static class LogSanitizer
         // 1) key=value 形式的密钥（最精确，先处理）
         line = KeyValueSecret.Replace(line, m => $"{m.Groups[1].Value}={Mask}");
 
-        // 2) 推流 / 服务地址：保留主机名，抹掉路径（串流密钥通常在路径里）
+        // 2) 推流 / 服务地址：保留主机名，抹掉路径（串流密钥通常在路径里）。
+        //    主机名本身可能内嵌用户 / 房间标识（如 xxx-12345.live.xxx.com），含长数字段的标签一并抹除。
         line = StreamUrl.Replace(line, m =>
         {
             var scheme = m.Groups[1].Value;
-            var host = m.Groups[2].Value;
+            var host = MaskHostIfIdentifiable(m.Groups[2].Value);
             var path = m.Groups[3].Value;
             // 本地回环地址（跟 OBS 的 websocket 连接）完整保留，方便排查连接问题
-            if (IsLoopbackHost(host)) return m.Value;
+            if (IsLoopbackHost(m.Groups[2].Value)) return m.Value;
             return string.IsNullOrEmpty(path) || path == "/"
                 ? $"{scheme}://{host}"
                 : $"{scheme}://{host}/{Mask}";
@@ -116,10 +121,46 @@ public static class LogSanitizer
         // 5) 公网 IPv4（保留私网与回环，它们对排查网络问题有用且不算隐私）
         line = Ipv4.Replace(line, m => IsPrivateOrLoopbackIpv4(m) ? m.Value : "[IP]");
 
-        // 6) 剩下的超长令牌
+        // 6) 公网 IPv6：macOS 网络日志常见，此前完全不处理属于外泄盲区。
+        //    仅保留回环 / 未指定地址，其余（含链路本地 fe80——后 64 位由 MAC 派生）一律抹除。
+        line = Ipv6Candidate.Replace(line, m =>
+        {
+            if (!System.Net.IPAddress.TryParse(m.Value, out var ip)) return m.Value;
+            if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6) return m.Value;
+            if (ip.Equals(System.Net.IPAddress.IPv6Loopback) || ip.Equals(System.Net.IPAddress.IPv6None))
+                return m.Value;
+            if (ip.IsIPv4MappedToIPv6)
+                return IsPrivateOrLoopbackIpv4(ip.MapToIPv4()) ? m.Value : "[IPv6]";
+            return "[IPv6]";
+        });
+
+        // 7) 剩下的超长令牌
         line = LongToken.Replace(line, m => IsAllowedToken(m.Value) ? m.Value : Mask);
 
         return line;
+    }
+
+    /// <summary>
+    /// 主机名残留处理：包含 ≥4 位连续数字或超长标签的主机名，把该标签替换为占位符
+    /// （推流平台常以「用户名-房间号」作为子域名，如 <c>xxx-12345.live.xxx.com</c>）。
+    /// </summary>
+    private static string MaskHostIfIdentifiable(string host)
+    {
+        var labels = host.Split('.');
+        for (int i = 0; i < labels.Length; i++)
+        {
+            var label = labels[i];
+            bool identifiable =
+                (label.Length >= 4 && label.Any(char.IsAsciiDigit) && Enumerable.Range(0, label.Length - 3)
+                    .Any(j => label.Skip(j).Take(4).All(char.IsAsciiDigit)))
+                || label.Length > 20;
+            if (identifiable)
+            {
+                labels[i] = "[主机]";
+            }
+        }
+        var masked = string.Join('.', labels);
+        return masked == host ? host : masked;
     }
 
     private static bool IsLoopbackHost(string host)
@@ -137,7 +178,17 @@ public static class LogSanitizer
             return true; // 解析不出来说明不是 IP（比如版本号），保留原样
 
         if (a > 255 || b > 255 || c > 255 || d > 255) return true; // 版本号之类
+        return IsPrivateOrLoopbackIpv4Bytes(a, b, c, d);
+    }
 
+    private static bool IsPrivateOrLoopbackIpv4(System.Net.IPAddress ip)
+    {
+        var b = ip.GetAddressBytes();
+        return b.Length != 4 || IsPrivateOrLoopbackIpv4Bytes(b[0], b[1], b[2], b[3]);
+    }
+
+    private static bool IsPrivateOrLoopbackIpv4Bytes(int a, int b, int c, int d)
+    {
         if (a == 127 || a == 10 || a == 0) return true;
         if (a == 192 && b == 168) return true;
         if (a == 172 && b >= 16 && b <= 31) return true;
@@ -151,10 +202,11 @@ public static class LogSanitizer
         // 纯数字（时间戳、字节数）不是密钥
         if (token.All(char.IsAsciiDigit)) return true;
 
-        // 版本号 / 已知标识符
+        // 版本号 / 已知标识符：必须与整个 token 全词相等。
+        // 之前按子串匹配，一个恰好包含 "Intel"/"AMD" 等字样的真实密钥会被漏掉。
         foreach (var allowed in TokenAllowList)
         {
-            if (token.Contains(allowed, StringComparison.OrdinalIgnoreCase)) return true;
+            if (token.Equals(allowed, StringComparison.OrdinalIgnoreCase)) return true;
         }
 
         // 全是字母且含有明显的英文单词分隔（下划线/连字符占比高）→ 多半是标识符而非密钥

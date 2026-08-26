@@ -19,15 +19,28 @@ public partial class MonitorPage : UserControl
         public IBrush DotBrush { get; init; } = Brushes.Gray;
     }
 
-    private readonly System.Timers.Timer _uiTimer;
+    private System.Timers.Timer? _uiTimer;
 
     public MonitorPage()
     {
         InitializeComponent();
-        _uiTimer = new System.Timers.Timer(1000);
-        _uiTimer.Elapsed += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(RefreshFromService);
-        Loaded += (_, _) => _uiTimer.Start();
-        Unloaded += (_, _) => _uiTimer.Stop();
+        // 页面销毁后必须释放定时器，否则泄漏；Loaded/Unloaded 可多次触发，
+        // 因此每次 Unloaded 释放、Loaded 重建。
+        Loaded += (_, _) =>
+        {
+            if (_uiTimer is null)
+            {
+                _uiTimer = new System.Timers.Timer(1000);
+                _uiTimer.Elapsed += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(RefreshFromService);
+            }
+            _uiTimer.Start();
+        };
+        Unloaded += (_, _) =>
+        {
+            _uiTimer?.Stop();
+            _uiTimer?.Dispose();
+            _uiTimer = null;
+        };
     }
 
     private void RefreshFromService()
@@ -49,7 +62,7 @@ public partial class MonitorPage : UserControl
             Detail = $"{a.At:HH:mm:ss} · {a.Detail}",
             Suggestion = a.Suggestion,
             ProblemId = a.ProblemId,
-            DotBrush = (LogSeverity)a.Severity switch
+            DotBrush = a.Severity switch
             {
                 LogSeverity.Critical or LogSeverity.Error =>
                     (IBrush?)this.FindResource("DangerBrush") ?? Brushes.Red,
@@ -70,7 +83,7 @@ public partial class MonitorPage : UserControl
                 return;
             }
             mon.Start();
-            _uiTimer.Start();
+            _uiTimer?.Start();
         }
         else
         {

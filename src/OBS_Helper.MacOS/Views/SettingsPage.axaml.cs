@@ -11,38 +11,48 @@ namespace OBS_Helper.MacOS.Views;
 /// <summary>设置页（与 Windows 版 SettingsPage 对齐）：外观 / 连接 / AI / 关于。</summary>
 public partial class SettingsPage : UserControl
 {
+    private bool _loading;
+
     public SettingsPage()
     {
         InitializeComponent();
         Loaded += async (_, _) => await LoadAsync();
+        // 只订阅一次：页面被缓存而 Loaded 可多次触发，重复订阅会导致保存动作被执行多次。
+        // 用 IsCheckedChanged 单一事件（Checked/Unchecked 已过时），加载期间挂 _loading 防止回写。
+        AutoConnect.IsCheckedChanged += OnConnectionChanged;
+        RememberPassword.IsCheckedChanged += OnConnectionChanged;
     }
 
     private async Task LoadAsync()
     {
-        var svc = App.Services;
+        _loading = true;
+        try
+        {
+            var svc = App.Services;
 
-        var dark = (Application.Current?.RequestedThemeVariant ?? ThemeVariant.Light) == ThemeVariant.Dark;
-        ThemeDark.IsChecked = dark;
-        ThemeLight.IsChecked = !dark;
+            var dark = (Application.Current?.RequestedThemeVariant ?? ThemeVariant.Light) == ThemeVariant.Dark;
+            ThemeDark.IsChecked = dark;
+            ThemeLight.IsChecked = !dark;
 
-        AutoConnect.IsChecked = svc.ObsSettings.Current.AutoConnect;
-        RememberPassword.IsChecked = svc.ObsSettings.Current.RememberPassword;
-        AutoConnect.Checked += OnConnectionChanged;
-        AutoConnect.Unchecked += OnConnectionChanged;
-        RememberPassword.Checked += OnConnectionChanged;
-        RememberPassword.Unchecked += OnConnectionChanged;
+            AutoConnect.IsChecked = svc.ObsSettings.Current.AutoConnect;
+            RememberPassword.IsChecked = svc.ObsSettings.Current.RememberPassword;
 
-        await svc.AiSettings.LoadAsync();
-        var cloud = svc.AiSettings.Mode == DiagnosticEngineMode.Cloud;
-        EngineCloud.IsChecked = cloud;
-        EngineLocal.IsChecked = !cloud;
-        CloudUrlBox.Text = svc.AiSettings.Settings.CloudUrl;
-        CloudModelBox.Text = svc.AiSettings.Settings.CloudModel;
-        RefreshAiStatus();
+            await svc.AiSettings.LoadAsync();
+            var cloud = svc.AiSettings.Mode == DiagnosticEngineMode.Cloud;
+            EngineCloud.IsChecked = cloud;
+            EngineLocal.IsChecked = !cloud;
+            CloudUrlBox.Text = svc.AiSettings.Settings.CloudUrl;
+            CloudModelBox.Text = svc.AiSettings.Settings.CloudModel;
+            RefreshAiStatus();
 
-        AboutText.Text =
-            $"OBS 排障助手 for macOS v{typeof(SettingsPage).Assembly.GetName().Version?.ToString(3)}\n" +
-            $"平台：{svc.Host.Platform} · 问题库：{(await svc.Problems.GetProblemsAsync()).Count} 条 · 全部诊断在本地完成。";
+            AboutText.Text =
+                $"OBS 排障助手 for macOS v{typeof(SettingsPage).Assembly.GetName().Version?.ToString(3)}\n" +
+                $"平台：{svc.Host.Platform} · 问题库：{(await svc.Problems.GetProblemsAsync()).Count} 条 · 全部诊断在本地完成。";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void OnThemeChanged(object? sender, RoutedEventArgs e)
@@ -55,6 +65,7 @@ public partial class SettingsPage : UserControl
 
     private async void OnConnectionChanged(object? sender, RoutedEventArgs e)
     {
+        if (_loading) return; // 页面加载时的程序化赋值不触发保存
         var cur = App.Services.ObsSettings.Current;
         await App.Services.ObsSettings.SaveAsync(new ObsConnectionSettings
         {

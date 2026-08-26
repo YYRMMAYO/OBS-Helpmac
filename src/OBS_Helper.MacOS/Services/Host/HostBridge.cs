@@ -3,7 +3,6 @@ using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace OBS_Helper.MacOS.Services.Host;
 
@@ -58,14 +57,6 @@ public sealed class HostShellPrefs
 {
     /// <summary>关闭主窗口时是否最小化到托盘（而非退出）。</summary>
     public bool CloseToTray { get; set; }
-}
-
-/// <summary>当前前台应用信息（场景自动切换的匹配对象）。</summary>
-public sealed class HostForegroundApp
-{
-    public string BundleId { get; set; } = "";
-    /// <summary>bundle id 最后一段（如 com.apple.Safari → Safari），供用户友好的规则匹配。</summary>
-    public string Name { get; set; } = "";
 }
 
 /// <summary>OBS 配置目录定位结果。</summary>
@@ -140,7 +131,7 @@ public sealed class HostDiskSample
 /// <summary>
 /// 桌面宿主能力的原生实现（Avalonia 版）。
 /// 与 Web 版语义一致：机密（obs-websocket 密码、LLM API Key）不进明文存储 ——
-/// macOS 走系统钥匙串（security CLI）；其它平台降级为键值存储。
+/// macOS 走系统钥匙串（security CLI，密文经 stdin 传递）；其它平台显式拒绝，绝不静默降级为明文。
 /// </summary>
 public sealed class HostBridge
 {
@@ -151,8 +142,6 @@ public sealed class HostBridge
     {
         PropertyNameCaseInsensitive = true
     };
-
-    private static readonly Regex Quoted = new("\"([^\"]+)\"", RegexOptions.Compiled);
 
     public HostBridge(Infrastructure.KeyValueStore store) => _store = store;
 
@@ -169,11 +158,6 @@ public sealed class HostBridge
     public string Platform =>
         OperatingSystem.IsMacOS() ? "macos" :
         OperatingSystem.IsWindows() ? "windows" : "linux";
-
-    /// <summary>Shell 动作处理器（保留与 Web 版兼容的挂载点；Avalonia 版暂无托盘事件源）。</summary>
-    public Func<string, Task>? ShellActionHandler { get; set; }
-
-    public Task StartShellListenerAsync() => Task.CompletedTask;
 
     /// <summary>探测宿主是否存在。桌面版恒为 true。</summary>
     public Task<bool> ProbeAsync() => Task.FromResult(true);
@@ -201,30 +185,81 @@ public sealed class HostBridge
         return path;
     }
 
+    /// <summary>
+    /// 判断 full 是否严格位于 root 目录内部。
+    /// 用 GetRelativePath 而非 StartsWith 前缀匹配：后者会被同级目录名绕过
+    /// （如 root=obs-studio 时 obs-studio-backup 也能通过校验）。
+    /// </summary>
+    private static bool IsInsideRoot(string root, string full)
+    {
+        var rel = Path.GetRelativePath(root, full);
+        return rel != "." && !rel.StartsWith("..", StringComparison.Ordinal)
+            && !Path.IsPathRooted(rel);
+    }
+
     // ------------------------------------------------------------ 进程辅助
 
-    private static (int Code, string Stdout) Run(string fileName, string args, int timeoutMs = 8000)
+    /// <summary>
+    /// 运行外部命令。stdout / stderr 始终被并发排空（避免管道缓冲区写满导致子进程死锁），
+    /// 超时后强制结束子进程。
+    /// </summary>
+    private static async Task<(int Code, string Stdout, string Stderr)> RunAsync(
+        string fileName, IReadOnlyList<string> args, string? stdin = null, int timeoutMs = 8000)
     {
         try
         {
             using var p = new Process();
-            p.StartInfo = new ProcessStartInfo(fileName, args)
+            p.StartInfo = new ProcessStartInfo(fileName)
             {
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                RedirectStandardInput = stdin is not null,
                 CreateNoWindow = true
             };
+            foreach (var a in args) p.StartInfo.ArgumentList.Add(a);
+
             p.Start();
-            var so = p.StandardOutput.ReadToEndAsync();
-            if (!p.WaitForExit(timeoutMs)) { try { p.Kill(); } catch { } }
-            return (p.ExitCode, so.Status == TaskStatus.RanToCompletion ? so.Result : "");
+
+            // 先启动两个读取任务再等待退出，保证管道被持续排空
+            var soTask = p.StandardOutput.ReadToEndAsync();
+            var seTask = p.StandardError.ReadToEndAsync();
+
+            if (stdin is not null)
+            {
+                await p.StandardInput.WriteAsync(stdin);
+                p.StandardInput.Close();
+            }
+
+            using var cts = new CancellationTokenSource(timeoutMs);
+            try
+            {
+                await p.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                try { p.Kill(true); } catch { }
+            }
+
+            await Task.WhenAll(soTask, seTask);
+            return (p.ExitCode, soTask.Result, seTask.Result);
         }
         catch
         {
-            return (-1, "");
+            return (-1, "", "");
         }
     }
+
+    private static (int Code, string Stdout) Run(string fileName, string args, int timeoutMs = 8000)
+    {
+        var (code, so, _) = RunAsync(fileName, SplitArgs(args), timeoutMs: timeoutMs)
+            .GetAwaiter().GetResult();
+        return (code, so);
+    }
+
+    /// <summary>极简参数切分：仅用于内部写死的参数串（如 lsappinfo info -only bundleid front）。</summary>
+    private static string[] SplitArgs(string args)
+        => string.IsNullOrWhiteSpace(args) ? Array.Empty<string>() : args.Split(' ');
 
     private static void OpenInBrowser(string url)
     {
@@ -240,23 +275,27 @@ public sealed class HostBridge
 
     // ------------------------------------------------------------ 机密存储
 
-    /// <summary>写入一条机密（加密后落盘）。</summary>
+    private const string KeychainService = "OBS_Helper";
+
+    /// <summary>
+    /// 写入一条机密到 macOS 系统钥匙串。
+    /// 密文经 <b>stdin</b> 传给 <c>security</c>，绝不进入命令行参数（argv 会被本机任意进程读到），
+    /// 参数一律用 ArgumentList 传递以杜绝注入。
+    /// 非 macOS 平台显式拒绝：不做明文落盘降级。
+    /// </summary>
     public async Task<bool> SetSecretAsync(string key, string value)
     {
+        if (!OperatingSystem.IsMacOS()) return false;
         try
         {
-            if (OperatingSystem.IsMacOS())
-            {
-                var escaped = value.Replace("'", @"'\''");
-                await Task.Run(() => Run("/usr/bin/security",
-                    $"add-generic-password -U -s OBS_Helper -a '{key}' -w '{escaped}'"));
-                return true;
-            }
-            _store.Set("secret:" + key, value);
-            return true;
+            var (code, _, _) = await RunAsync("/usr/bin/security",
+                new[] { "add-generic-password", "-U", "-s", KeychainService, "-a", key, "-w" },
+                stdin: value);
+            return code == 0;
         }
-        catch
+        catch (Exception ex)
         {
+            Infrastructure.AppLog.Error(ex, "钥匙串写入失败：" + key);
             return false;
         }
     }
@@ -264,18 +303,22 @@ public sealed class HostBridge
     /// <summary>读取一条机密；不存在时返回 null。</summary>
     public async Task<string?> GetSecretAsync(string key)
     {
+        if (!OperatingSystem.IsMacOS()) return null;
         try
         {
-            if (OperatingSystem.IsMacOS())
+            var (code, so, _) = await RunAsync("/usr/bin/security",
+                new[] { "find-generic-password", "-s", KeychainService, "-a", key, "-w" });
+            if (code != 0 || so.Length == 0)
             {
-                var (code, so) = await Task.Run(() =>
-                    Run("/usr/bin/security", $"find-generic-password -s OBS_Helper -a '{key}' -w"));
-                return code == 0 && !string.IsNullOrEmpty(so) ? so.TrimEnd('\n') : null;
+                if (code != 44) Infrastructure.AppLog.Warn($"钥匙串读取失败（exit {code}）：" + key);
+                return null;
             }
-            return _store.Get("secret:" + key);
+            // security 输出末尾固定带一个换行；只剥掉这一个，保留密码本身的边界字符
+            return so.EndsWith('\n') ? so[..^1] : so;
         }
-        catch
+        catch (Exception ex)
         {
+            Infrastructure.AppLog.Error(ex, "钥匙串读取异常：" + key);
             return null;
         }
     }
@@ -283,20 +326,13 @@ public sealed class HostBridge
     /// <summary>删除一条机密。</summary>
     public async Task<bool> DeleteSecretAsync(string key)
     {
-        try
+        if (OperatingSystem.IsMacOS())
         {
-            if (OperatingSystem.IsMacOS())
-            {
-                await Task.Run(() => Run("/usr/bin/security",
-                    $"delete-generic-password -s OBS_Helper -a '{key}'"));
-            }
-            _store.Remove("secret:" + key);
-            return true;
+            await RunAsync("/usr/bin/security",
+                new[] { "delete-generic-password", "-s", KeychainService, "-a", key });
         }
-        catch
-        {
-            return false;
-        }
+        _store.Remove("secret:" + key);
+        return true;
     }
 
     // ------------------------------------------------------------ 目录定位
@@ -356,7 +392,7 @@ public sealed class HostBridge
         {
             var full = Path.GetFullPath(path);
             var root = Path.GetFullPath(ObsLogDirectory);
-            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return Task.FromResult<string?>(null);
+            if (!IsInsideRoot(root, full)) return Task.FromResult<string?>(null);
             var ext = Path.GetExtension(full).ToLowerInvariant();
             if (ext is not (".txt" or ".log")) return Task.FromResult<string?>(null);
             return Task.FromResult<string?>(File.ReadAllText(full));
@@ -476,7 +512,7 @@ public sealed class HostBridge
         {
             var root = Path.GetFullPath(ObsConfigRoot);
             var target = Path.GetFullPath(Path.Combine(root, relativePath));
-            if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            if (!IsInsideRoot(root, target) && target != root)
                 return Task.FromResult(new List<HostConfigEntry>());
 
             var list = new List<HostConfigEntry>();
@@ -513,7 +549,7 @@ public sealed class HostBridge
         {
             var root = Path.GetFullPath(ObsConfigRoot);
             var full = Path.GetFullPath(Path.Combine(root, relativePath));
-            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return Task.FromResult<string?>(null);
+            if (!IsInsideRoot(root, full)) return Task.FromResult<string?>(null);
             if (!File.Exists(full)) return Task.FromResult<string?>(null);
             return Task.FromResult<string?>(File.ReadAllText(full));
         }
@@ -527,12 +563,17 @@ public sealed class HostBridge
 
     /// <summary>
     /// 转发一次云端 AI 请求：API Key 由本类从机密存储取出并拼装 Authorization 头，
-    /// 强制 https，密钥不进入调用方日志。
+    /// 强制 https，且拒绝内网 / 本机 / 链路本地目标（防 SSRF：API Key 会随请求发出，
+    /// 不能让钓鱼教程诱导用户把地址改成任意端点后把 Key 带走）。
     /// </summary>
     public async Task<string> AiChatAsync(string url, string secretKey, string body)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https")
             throw new InvalidOperationException("云端接口地址必须为 https。");
+
+        if (await IsPrivateOrUnresolvableEndpointAsync(uri))
+            throw new InvalidOperationException(
+                "云端接口地址不允许指向本机、内网或链路本地地址（防 SSRF 保护，API Key 会随请求发送）。");
 
         var key = await GetSecretAsync(secretKey);
         if (string.IsNullOrEmpty(key))
@@ -546,6 +587,51 @@ public sealed class HostBridge
         if (!resp.IsSuccessStatusCode)
             throw new InvalidOperationException($"云端返回 {(int)resp.StatusCode}：{Truncate(text, 300)}");
         return text;
+    }
+
+    /// <summary>主机名解析不出、指向回环/私网/链路本地/保留段的地址一律拒绝。</summary>
+    private static async Task<bool> IsPrivateOrUnresolvableEndpointAsync(Uri uri)
+    {
+        var host = uri.Host;
+        if (host is "localhost" or "localhost.localdomain") return true;
+        if (host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+            host.EndsWith(".internal", StringComparison.OrdinalIgnoreCase) ||
+            host.EndsWith(".localdomain", StringComparison.OrdinalIgnoreCase) ||
+            host.EndsWith(".lan", StringComparison.OrdinalIgnoreCase) ||
+            host.EndsWith(".home", StringComparison.OrdinalIgnoreCase) ||
+            host.EndsWith(".arpa", StringComparison.OrdinalIgnoreCase)) return true;
+
+        if (System.Net.IPAddress.TryParse(host, out var literal))
+            return IsNonPublicIp(literal);
+
+        try
+        {
+            var addrs = await System.Net.Dns.GetHostAddressesAsync(host);
+            return addrs.Length == 0 || addrs.Any(IsNonPublicIp);
+        }
+        catch
+        {
+            return true; // 解析失败视为不可信
+        }
+    }
+
+    private static bool IsNonPublicIp(System.Net.IPAddress ip)
+    {
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6UniqueLocal) return true;
+            if (ip.Equals(System.Net.IPAddress.IPv6Loopback) || ip.Equals(System.Net.IPAddress.IPv6None)) return true;
+            if (ip.IsIPv4MappedToIPv6) return IsNonPublicIp(ip.MapToIPv4());
+            return false;
+        }
+
+        var b = ip.GetAddressBytes();
+        return b[0] is 127 or 10 or 0
+            || b[0] == 169 && b[1] == 254
+            || b[0] == 192 && b[1] == 168
+            || b[0] == 172 && b[1] >= 16 && b[1] <= 31
+            || b[0] == 100 && b[1] >= 64 && b[1] <= 127   // CGNAT
+            || b[0] >= 224;                                // 组播 / 保留段
     }
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
@@ -577,7 +663,7 @@ public sealed class HostBridge
         }
         catch
         {
-            return null;
+            return Task.FromResult<string?>(null);
         }
     }
 
@@ -605,7 +691,7 @@ public sealed class HostBridge
     public Task<bool> IsObsRunningAsync() => Task.FromResult(FindObsProcesses().Length > 0);
 
     /// <summary>打包 OBS 配置为 zip。targetPath 为空时自动落到应用备份目录，返回实际路径。</summary>
-    public Task<string?> PackObsConfigAsync(string targetPath, bool includeKey, bool includePluginConfig, string reason)
+    public Task<string?> PackObsConfigAsync(string? targetPath, bool includeKey, bool includePluginConfig, string reason)
     {
         try
         {
@@ -627,7 +713,7 @@ public sealed class HostBridge
         }
         catch
         {
-            return null;
+            return Task.FromResult<string?>(null);
         }
     }
 
@@ -657,49 +743,76 @@ public sealed class HostBridge
             includeKey, includePluginConfig, "manual-export");
     }
 
-    /// <summary>从最近一份备份导入 OBS 配置。mode = overwrite | merge。</summary>
-    public Task<HostImportResult?> ImportObsConfigAsync(string mode)
+    /// <summary>zip 条目里明显不属于 OBS 配置的文件类型（防导入可执行载荷）。</summary>
+    private static readonly string[] ForbiddenImportExtensions =
+    {
+        ".sh", ".command", ".app", ".exe", ".bat", ".cmd", ".ps1", ".py", ".rb", ".pl",
+        ".dylib", ".so", ".dll", ".bin", ".framework"
+    };
+
+    /// <summary>
+    /// 从最近一份备份导入 OBS 配置。mode = overwrite | merge。
+    /// 解包目标严格限定在 obs-studio 目录内，且拒绝可执行文件与超限条目（防 zip 炸弹）。
+    /// OBS 正在运行时拒绝导入：运行中覆盖配置会产生新旧状态混杂。
+    /// </summary>
+    public async Task<HostImportResult?> ImportObsConfigAsync(string mode)
     {
         try
         {
+            if (FindObsProcesses().Length > 0)
+                return new HostImportResult
+                { Ok = false, Message = "OBS 正在运行，请先完全退出 OBS 再执行导入。" };
+
             var latest = new DirectoryInfo(BackupDir)
                 .EnumerateFiles("*.zip")
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .FirstOrDefault();
             if (latest is null)
-                return Task.FromResult<HostImportResult?>(new HostImportResult
-                { Ok = false, Message = "没有可用的备份文件。" });
+                return new HostImportResult
+                { Ok = false, Message = "没有可用的备份文件。" };
 
-            var root = ObsConfigRoot;
+            var root = Path.GetFullPath(ObsConfigRoot);
             if (!Directory.Exists(root)) Directory.CreateDirectory(root);
 
-            var autoBackup = PackObsConfigAsync(null!, true, true, "auto-before-import").GetAwaiter().GetResult();
+            var autoBackup = await PackObsConfigAsync(null, true, true, "auto-before-import");
 
+            const long maxTotalBytes = 512L * 1024 * 1024;
+            const int maxEntries = 20000;
             using var archive = ZipFile.OpenRead(latest.FullName);
+            if (archive.Entries.Count > maxEntries)
+                return new HostImportResult { Ok = false, Message = $"备份条目数异常（{archive.Entries.Count}），已取消导入。" };
+            if (archive.Entries.Sum(e => (long)e.Length) > maxTotalBytes)
+                return new HostImportResult { Ok = false, Message = "备份解压后体积超出限制（512 MB），已取消导入。" };
+
             int collections = 0, profiles = 0;
             foreach (var entry in archive.Entries)
             {
                 if (string.IsNullOrEmpty(entry.Name)) continue;
+
+                var ext = Path.GetExtension(entry.Name).ToLowerInvariant();
+                if (ForbiddenImportExtensions.Contains(ext)) continue;
+
                 var dest = Path.GetFullPath(Path.Combine(root, entry.FullName));
-                if (!dest.StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase)) continue;
+                if (!IsInsideRoot(root, dest)) continue;
+
                 Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                 entry.ExtractToFile(dest, overwrite: mode != "merge" || !File.Exists(dest));
                 var norm = entry.FullName.Replace('\\', '/');
                 if (norm.StartsWith("basic/scenes/", StringComparison.Ordinal)) collections++;
                 if (norm.StartsWith("basic/profiles/", StringComparison.Ordinal)) profiles++;
             }
-            return Task.FromResult<HostImportResult?>(new HostImportResult
+            return new HostImportResult
             {
                 Ok = true,
                 ImportedCollections = collections,
                 ImportedProfiles = profiles,
                 AutoBackupPath = autoBackup,
                 Message = "导入完成。重启 OBS 后生效。"
-            });
+            };
         }
         catch (Exception ex)
         {
-            return Task.FromResult<HostImportResult?>(new HostImportResult { Ok = false, Message = ex.Message });
+            return new HostImportResult { Ok = false, Message = ex.Message };
         }
     }
 
@@ -727,7 +840,10 @@ public sealed class HostBridge
         }
     }
 
-    /// <summary>彻底重置 OBS 配置（先自动备份，再把配置移入应用回收目录，永不硬删）。</summary>
+    /// <summary>
+    /// 彻底重置 OBS 配置（先自动备份，再把配置移入应用回收目录，永不硬删）。
+    /// OBS 正在运行时拒绝执行：运行中移走配置目录会产生新旧状态混杂。
+    /// </summary>
     public async Task<HostResetResult?> ResetObsConfigFullAsync()
     {
         try
@@ -736,7 +852,11 @@ public sealed class HostBridge
             if (!Directory.Exists(root))
                 return new HostResetResult { Ok = false, Message = "未找到 OBS 配置目录。" };
 
-            var backup = await PackObsConfigAsync(null!, true, true, "auto-before-reset");
+            if (FindObsProcesses().Length > 0)
+                return new HostResetResult
+                { Ok = false, Message = "OBS 正在运行，请先完全退出 OBS 再执行重置。" };
+
+            var backup = await PackObsConfigAsync(null, true, true, "auto-before-reset");
             var dest = Path.Combine(TrashDir, $"obs-studio-{DateTime.Now:yyyyMMdd-HHmmss}");
             Directory.Move(root, dest);
             return new HostResetResult
@@ -813,7 +933,7 @@ public sealed class HostBridge
 
     // ------------------------------------------------------------ 应用更新检查
 
-    /// <summary>查询本应用的 GitHub tags；失败或离线返回 null。</summary>
+    /// <summary>查询本应用的 GitHub tags（按版本号降序排列）；失败或离线返回 null。</summary>
     public async Task<List<string>?> CheckAppUpdateAsync()
     {
         try
@@ -822,15 +942,25 @@ public sealed class HostBridge
                 "https://api.github.com/repos/YYRMMAYO/OBS-Helpmac/tags?per_page=10");
             resp.EnsureSuccessStatusCode();
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            // tags 不保证按版本排序，必须显式解析版本号后降序排列，否则「最新版」判断可能错误
             return doc.RootElement.EnumerateArray()
                 .Select(e => e.GetProperty("name").GetString() ?? "")
                 .Where(n => n.Length > 0)
+                .OrderByDescending(n => ParseVersionLoose(n))
                 .ToList();
         }
         catch
         {
             return null;
         }
+    }
+
+    private static Version ParseVersionLoose(string tag)
+    {
+        var core = tag.TrimStart('v', 'V');
+        var cut = core.IndexOfAny(['-', '+']);
+        if (cut > 0) core = core[..cut];
+        return Version.TryParse(core, out var v) ? v : new Version(0, 0);
     }
 
     // ------------------------------------------------------------ Finder 显示
@@ -851,18 +981,6 @@ public sealed class HostBridge
         }
     }
 
-    // ------------------------------------------------------------ 小窗 / 主窗口 / 托盘
-    // Avalonia 版：托盘与小窗由后续版本提供，这里保持接口兼容（no-op）。
-
-    public Task ToggleMiniWindowAsync() => Task.CompletedTask;
-    public Task ShowMainWindowAsync() => Task.CompletedTask;
-    public Task HideMainWindowAsync() => Task.CompletedTask;
-    public Task ToggleMainWindowAsync() => Task.CompletedTask;
-    public Task QuitAppAsync() => Task.CompletedTask;
-
-    public Task ReportTrayStateAsync(bool connected, bool recording, bool streaming, bool vcam)
-        => Task.CompletedTask;
-
     /// <summary>读取桌面壳偏好（当前为「关闭到托盘」开关；存键值存储）。</summary>
     public Task<HostShellPrefs?> GetShellPrefsAsync()
     {
@@ -875,24 +993,5 @@ public sealed class HostBridge
     {
         _store.Set("shell.prefs.closeToTray", closeToTray ? "1" : "0");
         return Task.FromResult(true);
-    }
-
-    // ------------------------------------------------------------ 前台应用（场景自动切换）
-
-    /// <summary>查询当前前台应用（macOS：lsappinfo front 解析 bundle id；其它平台暂不支持）。</summary>
-    public Task<HostForegroundApp?> GetForegroundAppAsync()
-    {
-        if (!OperatingSystem.IsMacOS()) return Task.FromResult<HostForegroundApp?>(null);
-        var (code, so) = Run("/usr/bin/lsappinfo", "info -only bundleid front");
-        if (code != 0) return Task.FromResult<HostForegroundApp?>(null);
-        // 输出形如：CFBundleIdentifier="com.apple.Safari"
-        var m = Quoted.Match(so);
-        if (!m.Success) return Task.FromResult<HostForegroundApp?>(null);
-        var bundleId = m.Groups[1].Value;
-        return Task.FromResult<HostForegroundApp?>(new HostForegroundApp
-        {
-            BundleId = bundleId,
-            Name = bundleId.Split('.').LastOrDefault() ?? bundleId
-        });
     }
 }

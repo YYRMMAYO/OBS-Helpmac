@@ -79,6 +79,8 @@ public sealed class LiveMonitorService : IAsyncDisposable
     private readonly List<LiveAlert> _alerts = new();
     private readonly List<LiveSample> _samples = new();
     private readonly Dictionary<string, DateTime> _lastFired = new(StringComparer.Ordinal);
+    // 后台轮询线程写、UI 线程读，所有共享集合访问必须持锁
+    private readonly object _gate = new();
 
     private CancellationTokenSource? _cts;
     private Task? _loop;
@@ -99,14 +101,23 @@ public sealed class LiveMonitorService : IAsyncDisposable
     /// <summary>监控是否正在运行。</summary>
     public bool IsRunning => _loop is { IsCompleted: false };
 
-    /// <summary>告警列表（最新的在前）。</summary>
-    public IReadOnlyList<LiveAlert> Alerts => _alerts;
+    /// <summary>告警列表快照（最新的在前）。返回副本，UI 可安全枚举。</summary>
+    public IReadOnlyList<LiveAlert> Alerts
+    {
+        get { lock (_gate) return _alerts.ToArray(); }
+    }
 
-    /// <summary>最近的采样序列（旧 → 新），可用于画迷你曲线。</summary>
-    public IReadOnlyList<LiveSample> Samples => _samples;
+    /// <summary>最近的采样序列（旧 → 新）快照，可用于画迷你曲线。</summary>
+    public IReadOnlyList<LiveSample> Samples
+    {
+        get { lock (_gate) return _samples.ToArray(); }
+    }
 
     /// <summary>最近一次采样。</summary>
-    public LiveSample? Latest => _samples.Count > 0 ? _samples[^1] : null;
+    public LiveSample? Latest
+    {
+        get { lock (_gate) return _samples.Count > 0 ? _samples[^1] : null; }
+    }
 
     /// <summary>告警或采样更新时触发，页面据此重绘。</summary>
     public event Action? Changed;
@@ -130,8 +141,11 @@ public sealed class LiveMonitorService : IAsyncDisposable
 
     public void ClearAlerts()
     {
-        _alerts.Clear();
-        _lastFired.Clear();
+        lock (_gate)
+        {
+            _alerts.Clear();
+            _lastFired.Clear();
+        }
         Changed?.Invoke();
     }
 
@@ -208,40 +222,44 @@ public sealed class LiveMonitorService : IAsyncDisposable
 
     private void Sample()
     {
-        var s = _conn.Stats;
-        var stream = _conn.StreamStatus;
-
-        // 增量丢帧率：这是「现在卡不卡」，而不是「开播以来平均卡不卡」
-        double renderRatio = Delta(_prevRenderSkipped, s.RenderSkippedFrames, _prevRenderTotal, s.RenderTotalFrames);
-        double outputRatio = Delta(_prevOutputSkipped, s.OutputSkippedFrames, _prevOutputTotal, s.OutputTotalFrames);
-        double streamRatio = Delta(_prevStreamDropped, stream.SkippedFrames, _prevStreamTotal, stream.TotalFrames);
-
-        bool firstSample = !_hasPrev;
-
-        _prevRenderSkipped = s.RenderSkippedFrames;
-        _prevRenderTotal = s.RenderTotalFrames;
-        _prevOutputSkipped = s.OutputSkippedFrames;
-        _prevOutputTotal = s.OutputTotalFrames;
-        _prevStreamDropped = stream.SkippedFrames;
-        _prevStreamTotal = stream.TotalFrames;
-        _hasPrev = true;
-
-        var sample = new LiveSample
+        // Monitor 锁可重入：Evaluate → Fire 再次进入同一把锁是安全的
+        lock (_gate)
         {
-            CpuUsage = s.CpuUsage,
-            ActiveFps = s.ActiveFps,
-            FrameRenderTimeMs = s.AverageFrameRenderTimeMs,
-            RenderSkipRatio = renderRatio,
-            OutputSkipRatio = outputRatio,
-            StreamDropRatio = streamRatio,
-            AvailableDiskGb = s.AvailableDiskSpaceMb / 1024.0
-        };
+            var s = _conn.Stats;
+            var stream = _conn.StreamStatus;
 
-        _samples.Add(sample);
-        if (_samples.Count > MaxSamples) _samples.RemoveAt(0);
+            // 增量丢帧率：这是「现在卡不卡」，而不是「开播以来平均卡不卡」
+            double renderRatio = Delta(_prevRenderSkipped, s.RenderSkippedFrames, _prevRenderTotal, s.RenderTotalFrames);
+            double outputRatio = Delta(_prevOutputSkipped, s.OutputSkippedFrames, _prevOutputTotal, s.OutputTotalFrames);
+            double streamRatio = Delta(_prevStreamDropped, stream.SkippedFrames, _prevStreamTotal, stream.TotalFrames);
 
-        // 第一次采样没有可比基线，只记录不告警，否则会把「开播以来的累计丢帧」误报成瞬时卡顿。
-        if (!firstSample) Evaluate(sample);
+            bool firstSample = !_hasPrev;
+
+            _prevRenderSkipped = s.RenderSkippedFrames;
+            _prevRenderTotal = s.RenderTotalFrames;
+            _prevOutputSkipped = s.OutputSkippedFrames;
+            _prevOutputTotal = s.OutputTotalFrames;
+            _prevStreamDropped = stream.SkippedFrames;
+            _prevStreamTotal = stream.TotalFrames;
+            _hasPrev = true;
+
+            var sample = new LiveSample
+            {
+                CpuUsage = s.CpuUsage,
+                ActiveFps = s.ActiveFps,
+                FrameRenderTimeMs = s.AverageFrameRenderTimeMs,
+                RenderSkipRatio = renderRatio,
+                OutputSkipRatio = outputRatio,
+                StreamDropRatio = streamRatio,
+                AvailableDiskGb = s.AvailableDiskSpaceMb / 1024.0
+            };
+
+            _samples.Add(sample);
+            if (_samples.Count > MaxSamples) _samples.RemoveAt(0);
+
+            // 第一次采样没有可比基线，只记录不告警，否则会把「开播以来的累计丢帧」误报成瞬时卡顿。
+            if (!firstSample) Evaluate(sample);
+        }
 
         Changed?.Invoke();
     }

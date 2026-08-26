@@ -28,9 +28,10 @@ public sealed class KeyValueStore
                 _map = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new();
             }
         }
-        catch
+        catch (Exception ex)
         {
             _map = new();
+            AppLog.Error(ex, "store.json 读取/解析失败，已回退为空配置");
         }
     }
 
@@ -63,11 +64,15 @@ public sealed class KeyValueStore
     {
         try
         {
-            File.WriteAllText(_filePath, JsonSerializer.Serialize(_map));
+            // 原子写入：先写临时文件再替换，避免进程中途崩溃留下半个 JSON 导致全部数据静默丢失
+            var tmp = _filePath + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(_map));
+            File.Move(tmp, _filePath, overwrite: true);
         }
         catch
         {
             // 磁盘不可写时静默降级为内存态，与 Web 版无痕模式行为一致
+            try { if (File.Exists(_filePath + ".tmp")) File.Delete(_filePath + ".tmp"); } catch { }
         }
     }
 }

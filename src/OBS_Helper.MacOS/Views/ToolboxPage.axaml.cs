@@ -38,7 +38,7 @@ public partial class ToolboxPage : UserControl
             return;
         }
 
-        AnalyzeBtn.IsEnabled = true;
+        AnalyzeBtn.IsEnabled = false;
         try
         {
             var raw = await App.Services.Host.ReadObsLogAsync(latest.Path);

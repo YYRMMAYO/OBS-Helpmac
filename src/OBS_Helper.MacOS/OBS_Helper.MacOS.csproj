@@ -5,11 +5,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
-    <Version>2.0.0</Version>
-    <InformationalVersion>2.0.0</InformationalVersion>
+    <Version>2.1.0</Version>
+    <InformationalVersion>2.1.0</InformationalVersion>
     <InvariantGlobalization>false</InvariantGlobalization>
     <Copyright>Copyright (c) 2026 OBS Helper</Copyright>
     <Authors>OBS Helper</Authors>

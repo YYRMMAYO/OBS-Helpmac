@@ -44,6 +44,10 @@ public partial class ConsolePage : UserControl
             _ => "未连接"
         };
 
+        // 非回环目标时 ws:// 为明文传输，给出持续可见的安全提示
+        var host = App.Services.ObsSettings.Current.Host;
+        PlainWarnText.IsVisible = !IsLoopbackHost(host);
+
         var connected = obs.IsConnected;
         StateDot.Fill = connected
             ? this.FindResource("SuccessBrush") as Avalonia.Media.IBrush ?? Avalonia.Media.Brushes.Green
@@ -89,6 +93,9 @@ public partial class ConsolePage : UserControl
             $"虚拟摄像头：{(_vcam ? "运行中" : "已停止")}";
     }
 
+    private static bool IsLoopbackHost(string host)
+        => host is "127.0.0.1" or "::1" || host.Equals("localhost", StringComparison.OrdinalIgnoreCase);
+
     private async void OnConnect(object? sender, RoutedEventArgs e)
     {
         ErrorText.IsVisible = false;
@@ -100,6 +107,10 @@ public partial class ConsolePage : UserControl
             AutoReconnect = true,
             RememberPassword = RememberPwd.IsChecked == true
         };
+
+        // 连接需要使用界面上的新地址，先在内存中生效；
+        // 但只有连接成功才持久化——失败的配置不应入库。
+        var previous = App.Services.ObsSettings.Current;
         await App.Services.ObsSettings.SaveAsync(settings);
 
         ConnectBtn.IsEnabled = false;
@@ -107,10 +118,16 @@ public partial class ConsolePage : UserControl
         {
             var pwd = string.IsNullOrEmpty(PasswordBox.Text) ? null : PasswordBox.Text;
             var ok = await App.Services.Obs.ConnectAsync(pwd);
-            await App.Services.ObsSettings.SetPasswordAsync(
-                ok ? PasswordBox.Text : null, RememberPwd.IsChecked == true);
-            if (!ok)
+            if (ok)
             {
+                // 只在用户本次输入了密码时更新钥匙串；绝不在成功路径上误删已保存的正确密码
+                if (!string.IsNullOrEmpty(PasswordBox.Text))
+                    await App.Services.ObsSettings.SetPasswordAsync(
+                        PasswordBox.Text, RememberPwd.IsChecked == true);
+            }
+            else
+            {
+                await App.Services.ObsSettings.SaveAsync(previous);
                 ErrorText.Text = App.Services.Obs.LastError ?? "无法连接到 OBS。请确认 OBS 已启动，并在「设置 → WebSocket 服务器」开启远程访问。";
                 ErrorText.IsVisible = true;
             }

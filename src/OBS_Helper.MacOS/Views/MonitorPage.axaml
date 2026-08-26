@@ -29,7 +29,7 @@
 
       <!-- 预警列表 -->
       <TextBlock Text="预警记录" Classes="h2" Margin="2,6,0,0"/>
-      <ItemsControl x:Name="AlertList" ><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      <ItemsControl x:Name="AlertList"><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate>
             <Border Classes="card" Padding="14">

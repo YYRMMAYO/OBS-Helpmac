@@ -128,7 +128,10 @@ public sealed class SceneTemplateService
                 if (cur is not null)
                 {
                     await _obs.RawRequestAsync("SetCurrentSceneTransition", new { transitionName = cur });
-                    await _obs.RawRequestAsync("SetCurrentSceneTransitionDuration", new { transitionDuration = tpl.TransitionDurationMs });
+                    // 模板数据缺省 / 非法时可能是 ≤0，直接透传会被 OBS 拒绝
+                    if (tpl.TransitionDurationMs > 0)
+                        await _obs.RawRequestAsync("SetCurrentSceneTransitionDuration",
+                            new { transitionDuration = tpl.TransitionDurationMs });
                 }
                 else
                 {
@@ -151,12 +154,19 @@ public sealed class SceneTemplateService
                 {
                     var ovName = PickTransitionName(scene.Transition ?? tpl.Transition, transitionNames);
                     var ovDur = scene.TransitionDurationMs ?? tpl.TransitionDurationMs;
-                    var ovOk = await _obs.RawRequestAsync("SetSceneTransitionOverride", new
-                    {
-                        sceneName = scene.Name,
-                        transitionName = ovName,
-                        transitionDuration = ovDur
-                    });
+                    // duration ≤0（模板数据缺省）时不携带该字段，交给 OBS 沿用当前设置
+                    var ovOk = ovDur is > 0
+                        ? await _obs.RawRequestAsync("SetSceneTransitionOverride", new
+                        {
+                            sceneName = scene.Name,
+                            transitionName = ovName,
+                            transitionDuration = ovDur
+                        })
+                        : await _obs.RawRequestAsync("SetSceneTransitionOverride", new
+                        {
+                            sceneName = scene.Name,
+                            transitionName = ovName
+                        });
                     if (!ovOk.Ok && ovName is null)
                         transitionNotes.Add($"场景「{scene.Name}」的过渡覆盖未生效（{Describe(ovOk)}）。");
                 }

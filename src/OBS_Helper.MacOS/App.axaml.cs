@@ -32,7 +32,18 @@ public partial class App : Application
 
         base.OnFrameworkInitializationCompleted();
 
-        _ = Services.InitializeAsync();
+        // 启动初始化的失败必须留痕：自动连接失败等此前完全静默
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Services.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                Infrastructure.AppLog.Error(ex, "应用启动初始化失败（自动连接 / 设置加载）");
+            }
+        });
     }
 }
 

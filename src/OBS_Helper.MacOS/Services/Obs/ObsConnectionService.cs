@@ -153,11 +153,14 @@ public sealed class ObsConnectionService : IAsyncDisposable
         }
 
         CancelReconnect();
-        _reconnectCts = new CancellationTokenSource();
-        var token = _reconnectCts.Token;
+        var cts = new CancellationTokenSource();
+        _reconnectCts = cts;
+        var token = cts.Token;
         var delay = _policy.DelayFor(_attempt);
 
         SetState(ObsConnectionState.Reconnecting);
+        // 后台任务自己负责释放 CTS：不能在 CancelReconnect 里立即 Dispose，
+        // 否则上一轮任务可能仍在 Task.Delay 中使用该 token 而抛 ObjectDisposedException。
         _ = Task.Run(async () =>
         {
             try
@@ -178,14 +181,18 @@ public sealed class ObsConnectionService : IAsyncDisposable
             {
                 // 用户手动重连 / 断开时取消倒计时，属正常路径。
             }
-        }, token);
+            finally
+            {
+                if (_reconnectCts == cts) _reconnectCts = null;
+                cts.Dispose();
+            }
+        }, CancellationToken.None);
     }
 
     private void CancelReconnect()
     {
-        try { _reconnectCts?.Cancel(); } catch (Exception) { /* 已释放 */ }
-        _reconnectCts?.Dispose();
-        _reconnectCts = null;
+        var cts = Interlocked.Exchange(ref _reconnectCts, null);
+        try { cts?.Cancel(); } catch (ObjectDisposedException) { /* 已由后台任务释放 */ }
         ReconnectInSeconds = 0;
     }
 

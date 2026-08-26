@@ -11,8 +11,9 @@ namespace OBS_Helper.MacOS.Services.Ai;
 /// 关键安全约束（见 <see cref="HostBridge.AiChatAsync"/>）：
 /// <list type="bullet">
 ///   <item>请求经桌面宿主转发，API Key 由宿主从加密存储取出并拼装 Authorization 头，
-///         前端只传「密钥键名」，密钥不进入 WebAssembly 内存；</item>
-///   <item>宿主侧强制 https-only 且做了 SSRF 拦截，前端这里再兜底校验一次地址；</item>
+///         前端只传「密钥键名」，密钥不进入前端内存；</item>
+///   <item>宿主侧强制 https-only，并拒绝回环 / 内网 / 链路本地 / 保留段目标（防 SSRF，
+///         避免 API Key 被钓鱼配置诱导发往任意端点），这里再对地址做一次 https 兜底校验；</item>
 ///   <item>模型只能通过 <see cref="ObsToolRegistry"/> 暴露的工具读取已脱敏/结构化的数据，
 ///         拿不到原始日志、更拿不到任何密钥。</item>
 /// </list>
