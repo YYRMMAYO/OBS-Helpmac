@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.HomePage">
+  <ScrollViewer Padding="28,24" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="18" MaxWidth="860" HorizontalAlignment="Left">
+
+      <!-- Hero -->
+      <Border Classes="card" Padding="24">
+        <StackPanel Spacing="8">
+          <TextBlock Text="开播更稳，排障更快" Classes="h1" />
+          <TextBlock Classes="muted"
+                     Text="覆盖黑屏、卡顿、音画不同步、推流失败等高频问题的分步解决方案。全部数据离线可用，机密信息存入系统钥匙串。" />
+          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0">
+            <Button Classes="primary" Content="搜索问题" Click="GoSearch" />
+            <Button Classes="secondary" Content="问 AI 助手" Click="GoAssistant" />
+            <Button Classes="ghost" Content="一键诊断" Click="GoDiagnostic" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- 统计 -->
+      <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
+        <Border Classes="card"><StackPanel><TextBlock x:Name="StatProblems" Text="—" Classes="h1"/><TextBlock Text="排障方案" Classes="muted"/></StackPanel></Border>
+        <Border Classes="card"><StackPanel><TextBlock x:Name="StatCategories" Text="—" Classes="h1"/><TextBlock Text="问题分类" Classes="muted"/></StackPanel></Border>
+        <Border Classes="card"><StackPanel><TextBlock x:Name="StatTemplates" Text="—" Classes="h1"/><TextBlock Text="场景模板" Classes="muted"/></StackPanel></Border>
+        <Border Classes="card"><StackPanel><TextBlock x:Name="StatBookmarks" Text="—" Classes="h1"/><TextBlock Text="我的收藏" Classes="muted"/></StackPanel></Border>
+      </Grid>
+
+      <!-- 分类入口 -->
+      <TextBlock Text="按分类浏览" Classes="h2" Margin="2,6,0,0"/>
+      <ItemsControl x:Name="CategoryList">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Classes="card" Margin="0,0,12,12" Padding="16">
+              <Button Background="Transparent" BorderThickness="0" Padding="0"
+                      HorizontalContentAlignment="Left" Click="OnCategoryClick"
+                      Tag="{Binding Id}">
+                <StackPanel>
+                  <TextBlock Text="{Binding Title}" Classes="body" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Description}" Classes="muted" Margin="0,4,0,0" MaxLines="2" />
+                </StackPanel>
+              </Button>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- 收藏 -->
+      <TextBlock Text="最近收藏" Classes="h2" Margin="2,6,0,0"/>
+      <Border Classes="card">
+        <StackPanel x:Name="BookmarkPanel" Spacing="8">
+          <TextBlock Text="暂无收藏。浏览问题时点击「收藏」即可在这里找到。" Classes="muted" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

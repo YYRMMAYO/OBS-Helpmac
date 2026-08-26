@@ -1,0 +1,154 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OBS_Helper.MacOS.Views.MainWindow"
+        xmlns:v="clr-namespace:OBS_Helper.MacOS.Views"
+        Title="OBS 排障助手"
+        Width="1180" Height="800"
+        MinWidth="960" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="PreferSystemChrome"
+        ExtendClientAreaTitleBarHeightHint="52"
+        SystemDecorations="Full"
+        TransparencyLevelHint="AcrylicBlur"
+        Background="{DynamicResource WindowBgBrush}"
+        FontFamily="{StaticResource AppFontFamily}">
+
+  <Grid ColumnDefinitions="222,*">
+
+    <!-- ==================== 侧栏 ==================== -->
+    <Border Grid.Column="0" Background="{DynamicResource SidebarBgBrush}"
+            BorderBrush="{DynamicResource HairlineBrush}" BorderThickness="0,0,1,0">
+      <DockPanel Margin="12,48,10,12">
+
+        <!-- 品牌 -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,18">
+          <Image Width="30" Height="30" Source="/Assets/appicon.png" VerticalAlignment="Center" />
+          <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+            <TextBlock Text="OBS 排障助手" FontWeight="Bold" FontSize="{StaticResource FontSizeMd}"
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock x:Name="VersionText" Text="v2.0.0 · macOS" FontSize="{StaticResource FontSizeXs}"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- 底部状态 -->
+        <Border DockPanel.Dock="Bottom" CornerRadius="8" Padding="10,8" Margin="4,8,4,0"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource HairlineBrush}" BorderThickness="1">
+          <StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Ellipse x:Name="SideDot" Width="8" Height="8" Fill="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center" />
+              <TextBlock x:Name="SideState" Text="未连接 OBS" FontSize="{StaticResource FontSizeXs}"
+                         Foreground="{DynamicResource TextSecondaryBrush}" />
+            </StackPanel>
+            <TextBlock Text="离线可用 · 数据仅存本机" Margin="0,6,0,0" FontSize="{StaticResource FontSizeXs}"
+                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="1">
+            <RadioButton x:Name="NavHome"       GroupName="nav" Classes="nav" IsChecked="True" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconHome}" /><TextBlock Text="首页" /></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavSearch"     GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconSearch}" /><TextBlock Text="搜索" /></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavAssistant"  GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconAssistant}" /><TextBlock Text="助手" /></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavDiagnostic" GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconPulse}" /><TextBlock Text="诊断" /></StackPanel>
+            </RadioButton>
+
+            <TextBlock Text="直播间搭建" Margin="10,14,0,4" FontSize="{StaticResource FontSizeXs}"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <RadioButton x:Name="NavSetup"      GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconSetup}" /><TextBlock Text="搭建" /></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavTemplates"  GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconLayers}" /><TextBlock Text="模板" /></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavPlugins"    GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconPlugin}" /><TextBlock Text="插件" /></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavToolbox"    GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconToolbox}" /><TextBlock Text="工具箱" /></StackPanel>
+            </RadioButton>
+
+            <TextBlock Text="实时控制" Margin="10,14,0,4" FontSize="{StaticResource FontSizeXs}"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <RadioButton x:Name="NavConsole"    GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconTerminal}" /><TextBlock Text="控制台" /></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavMonitor"    GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconChart}" /><TextBlock Text="监控" /></StackPanel>
+            </RadioButton>
+
+            <TextBlock Text="参考" Margin="10,14,0,4" FontSize="{StaticResource FontSizeXs}"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <RadioButton x:Name="NavGuide"      GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconBook}" /><TextBlock Text="指引" /></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavSettings"   GroupName="nav" Classes="nav" Checked="OnNavChecked">
+              <StackPanel Orientation="Horizontal"><Path Classes="nav-icon" Data="{StaticResource IconGear}" /><TextBlock Text="设置" /></StackPanel>
+            </RadioButton>
+          </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+
+    <!-- ==================== 内容区 ==================== -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,*">
+
+      <!-- 顶栏 -->
+      <Border Grid.Row="0" Background="{DynamicResource WindowBgBrush}"
+              BorderBrush="{DynamicResource HairlineBrush}" BorderThickness="0,0,0,1"
+              Padding="20,12">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Grid.Column="0" VerticalAlignment="Center">
+            <TextBlock x:Name="PageTitle" Text="首页" Classes="h2" />
+            <TextBlock x:Name="PageSubtitle" Text="按分类查问题，或直接问助手" Classes="muted" />
+          </StackPanel>
+          <Button Grid.Column="1" Classes="secondary" Content="设置" VerticalAlignment="Center"
+                  Click="OnSettingsClick" />
+        </Grid>
+      </Border>
+
+      <!-- 页面容器 -->
+      <ContentControl x:Name="PageHost" Grid.Row="1" />
+    </Grid>
+  </Grid>
+
+  <Window.Resources>
+    <!-- 线性图标（stroke 风格，对齐 SF Symbols 视觉） -->
+    <Geometry x:Key="IconHome">M2,8 L8,2 L14,8 M4,7 L4,13.5 L12,13.5 L12,7</Geometry>
+    <Geometry x:Key="IconSearch">M6.5,12 A4.5,4.5 0 1 1 6.5,3.2 A4.5,4.5 0 1 1 6.5,12 M10.5,10.5 L14,14</Geometry>
+    <Geometry x:Key="IconAssistant">M2.5,3 L13.5,3 L13.5,10 L7,10 L4,13 L4,10 L2.5,10 Z</Geometry>
+    <Geometry x:Key="IconPulse">M1,8 L4.5,8 L6.5,4 L9.5,12 L11.5,8 L15,8</Geometry>
+    <Geometry x:Key="IconSetup">M3,13.5 L7.5,9 M7.5,9 A3.2,3.2 0 1 0 12,4.5</Geometry>
+    <Geometry x:Key="IconLayers">M8,2 L14,5 L8,8 L2,5 Z M2,8 L8,11 L14,8 M2,11 L8,14 L14,11</Geometry>
+    <Geometry x:Key="IconPlugin">M3,3 L6.5,3 L6.5,4.8 A1.5,1.5 0 1 0 9.5,4.8 L9.5,3 L13,3 L13,6.5 L11.2,6.5 A1.5,1.5 0 1 0 11.2,9.5 L13,9.5 L13,13 L3,13 Z</Geometry>
+    <Geometry x:Key="IconToolbox">M2,6 L14,6 L14,13.5 L2,13.5 Z M5.5,6 L5.5,4 L10.5,4 L10.5,6 M2,9.5 L14,9.5</Geometry>
+    <Geometry x:Key="IconTerminal">M2,2.5 L14,2.5 L14,13.5 L2,13.5 Z M4.5,6 L6.5,8 L4.5,10 M8.5,10.5 L11.5,10.5</Geometry>
+    <Geometry x:Key="IconChart">M2.5,2.5 L2.5,13.5 L13.5,13.5 M4,10 L7,6.5 L9.5,9 L13,4</Geometry>
+    <Geometry x:Key="IconBook">M3,2.5 L12,2.5 A1,1 0 0 1 13,3.5 L13,12.5 A1,1 0 0 1 12,13.5 L3,13.5 Z M5.2,2.5 L5.2,13.5</Geometry>
+    <Geometry x:Key="IconGear">M8,5.5 A2.5,2.5 0 1 1 8,10.5 A2.5,2.5 0 1 1 8,5.5 M8,1.5 L8,3.2 M8,12.8 L8,14.5 M1.5,8 L3.2,8 M12.8,8 L14.5,8 M3.4,3.4 L4.6,4.6 M11.4,11.4 L12.6,12.6 M12.6,3.4 L11.4,4.6 M4.6,11.4 L3.4,12.6</Geometry>
+  </Window.Resources>
+
+  <Window.Styles>
+    <Style Selector="Path.nav-icon">
+      <Setter Property="Width" Value="17" />
+      <Setter Property="Height" Value="17" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="StrokeThickness" Value="1.4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,10,0" />
+    </Style>
+    <Style Selector="RadioButton.nav:checked Path.nav-icon">
+      <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    </Style>
+  </Window.Styles>
+</Window>

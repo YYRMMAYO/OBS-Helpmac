@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.ToolboxPage">
+  <ScrollViewer Padding="28,24" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="14" MaxWidth="860" HorizontalAlignment="Left">
+      <TextBlock Text="工具箱" Classes="h2" Margin="2,0,0,0" />
+
+      <!-- 日志 -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Text="日志" Classes="h2" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button Classes="secondary" Content="打开日志目录" Click="OnOpenLogs" />
+            <Button Classes="secondary" Content="在 Finder 中显示" Click="OnRevealLogs" />
+            <Button x:Name="AnalyzeBtn" Classes="primary" Content="分析最新日志" Click="OnAnalyzeLog" />
+          </StackPanel>
+          <ListBox x:Name="LogFileList" MaxHeight="150" SelectionMode="Single">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Grid.Column="1" Text="{Binding SizeText}" Classes="muted" />
+                  <TextBlock Grid.Column="2" Text="{Binding ModifiedText}" Classes="muted" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+      </Border>
+
+      <!-- 配置 -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Text="配置与备份" Classes="h2" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button Classes="secondary" Content="定位配置目录" Click="OnLocateConfig" />
+            <Button Classes="secondary" Content="创建备份" Click="OnBackup" />
+            <Button Classes="secondary" Content="从备份导入" Click="OnImport" />
+            <Button x:Name="ResetBtn" Classes="secondary" Content="彻底重置配置…" Click="OnReset"
+                    Foreground="{DynamicResource DangerBrush}" />
+          </StackPanel>
+          <TextBlock x:Name="ToolStatus" Classes="muted" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <!-- 分析结果 -->
+      <Border Classes="card" x:Name="AnalysisCard" IsVisible="False">
+        <StackPanel Spacing="8">
+          <TextBlock Text="日志分析结果" FontWeight="SemiBold" />
+          <ItemsControl x:Name="AnalysisList" ><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="{DynamicResource WarningBrush}" />
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Detail}" Classes="muted" TextWrapping="Wrap" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.TemplatesPage">
+  <ScrollViewer Padding="28,24" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="14" MaxWidth="860" HorizontalAlignment="Left">
+      <TextBlock Text="场景模板" Classes="h2" Margin="2,0,0,0" />
+      <TextBlock x:Name="HintText" Classes="muted" Margin="2,0,0,0"
+                 Text="已连接 OBS 时可一键在线落地；未连接时可导出为 OBS 场景集合 JSON 手动导入。" />
+      <ItemsControl x:Name="TemplateList" ><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Classes="card">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="5">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Description}" Classes="muted" />
+                  <TextBlock Text="{Binding Meta}" Classes="muted" FontSize="{StaticResource FontSizeXs}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <Button Classes="primary" Content="在线落地" Click="OnApply" Tag="{Binding Id}" />
+                  <Button Classes="secondary" Content="导出 JSON" Click="OnExport" Tag="{Binding Id}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <ProgressBar x:Name="Progress" IsIndeterminate="True" IsVisible="False" Height="4" CornerRadius="2" />
+      <TextBlock x:Name="StatusText" Classes="muted" TextWrapping="Wrap" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

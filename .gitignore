@@ -17,3 +17,7 @@ OBS_Helper.Mac/src-tauri/icons/*
 .vscode/
 .idea/
 *.user
+
+_publish-test/
+publish/
+dist/

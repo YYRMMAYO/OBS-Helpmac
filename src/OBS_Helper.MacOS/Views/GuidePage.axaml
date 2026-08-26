@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.GuidePage">
+  <ScrollViewer Padding="28,24" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="14" MaxWidth="860" HorizontalAlignment="Left">
+
+      <TextBlock Text="官方文档与指引" Classes="h2" Margin="2,0,0,0" />
+
+      <ItemsControl x:Name="LinkList" ><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Classes="card">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Description}" Classes="muted" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="ghost" VerticalAlignment="Center"
+                        Click="OnOpen" Tag="{Binding Url}">
+                  <TextBlock Text="打开 →" Foreground="{DynamicResource AccentBrush}" />
+                </Button>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Classes="card">
+        <StackPanel Spacing="6">
+          <TextBlock Text="macOS 直播小贴士" FontWeight="SemiBold" />
+          <TextBlock Classes="body" TextWrapping="Wrap"
+                     Text="· M 系芯片优先使用硬件编码（VideoToolbox），发热与功耗显著低于 x264。" />
+          <TextBlock Classes="body" TextWrapping="Wrap"
+                     Text="· 外接采集卡 / 摄像头首次使用需授予摄像头权限；多显示器扩展屏直播时注意「显示器采集」选择的是哪块屏幕。" />
+          <TextBlock Classes="body" TextWrapping="Wrap"
+                     Text="· 系统更新后若 OBS 无法启动，先删除 ~/Library/Application Support/obs-studio 之外不影响媒体文件，再尝试重装。" />
+          <TextBlock Classes="body" TextWrapping="Wrap"
+                     Text="· 长时间直播建议在「监控」页保持预警开启，磁盘写满会直接中断录制。" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

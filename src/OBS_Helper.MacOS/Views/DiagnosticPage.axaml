@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.DiagnosticPage">
+  <ScrollViewer Padding="28,24" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="16" MaxWidth="860" HorizontalAlignment="Left">
+
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <TextBlock Text="一键诊断" Classes="h2" />
+          <TextBlock Classes="muted"
+                     Text="扫描本机环境（OBS 进程、磁盘、系统版本）+ 读取 OBS 配置，结合本地规则引擎给出归因建议。全程离线。" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button x:Name="ScanBtn" Classes="primary" Content="开始诊断" Click="OnDiagnose" />
+            <CheckBox x:Name="AllowNetwork" Content="允许联网查询 OBS 最新版本" IsChecked="True" />
+          </StackPanel>
+          <ProgressBar x:Name="Progress" IsIndeterminate="True" IsVisible="False" Height="4" CornerRadius="2" />
+        </StackPanel>
+      </Border>
+
+      <!-- 诊断结果 -->
+      <ItemsControl x:Name="ResultList" ><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Classes="card" Padding="14">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Ellipse Width="10" Height="10" VerticalAlignment="Top" Margin="0,5,0,0"
+                         Fill="{Binding DotBrush}" />
+                <StackPanel>
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Detail}" Classes="muted" Margin="0,3" />
+                  <TextBlock Text="{Binding Suggestion}" Classes="body" Margin="0,3" TextWrapping="Wrap" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Classes="card" x:Name="SummaryCard" IsVisible="False">
+        <TextBlock x:Name="SummaryText" Classes="muted" TextWrapping="Wrap" />
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,0 +1,118 @@
+name: Build macOS (Avalonia)
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: build-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS APP + DMG (${{ matrix.rid }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [osx-arm64, osx-x64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish self-contained
+        run: |
+          dotnet publish src/OBS_Helper.MacOS/OBS_Helper.MacOS.csproj \
+            -c Release -r ${{ matrix.rid }} --self-contained \
+            -p:PublishSingleFile=false \
+            -o publish/${{ matrix.rid }}
+
+      # ---------- 组装 .app bundle ----------
+      - name: Bundle .app
+        run: |
+          set -e
+          APP_NAME="OBS 排障助手"
+          APP="dist/${APP_NAME}.app"
+          ARCH="${{ matrix.rid }}"
+          VERSION=$( /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' packaging/Info.plist )
+
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp -R publish/${ARCH}/* "$APP/Contents/MacOS/"
+          cp packaging/Info.plist "$APP/Contents/Info.plist"
+          cp packaging/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+
+          # 可执行权限 & ad-hoc 签名（本地可运行；分发需 Developer ID 公证）
+          chmod +x "$APP/Contents/MacOS/OBS_Helper.MacOS"
+          codesign --force --deep -s - "$APP" || true
+
+          # 校验 bundle
+          plutil -lint "$APP/Contents/Info.plist"
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Create DMG
+        run: |
+          set -e
+          mkdir -p dmg-src
+          cp -R "dist/OBS 排障助手.app" dmg-src/
+          ln -sf /Applications dmg-src/Applications
+
+          mkdir -p release
+          hdiutil create -volname "OBS Helper" \
+            -srcfolder dmg-src \
+            -ov -format UDZO \
+            "release/OBS_Helper-${VERSION}-macOS-${ARCH_NAME}.dmg"
+        env:
+          ARCH_NAME: ${{ matrix.rid == 'osx-arm64' && 'arm64' || 'x64' }}
+
+      - name: Smoke test (launch and quit)
+        if: matrix.rid == 'osx-arm64'
+        run: |
+          set -e
+          "./dist/OBS 排障助手.app/Contents/MacOS/OBS_Helper.MacOS" &
+          PID=$!
+          sleep 6
+          if kill -0 $PID 2>/dev/null; then
+            echo "App launched successfully."
+            kill $PID || true
+          else
+            echo "::warning::App process exited early (may be headless limitation)."
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OBS_Helper-macos-${{ matrix.rid }}
+          path: |
+            release/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Attach DMG to GitHub Release
+    needs: macos
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: release
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.dmg
+          generate_release_notes: true

@@ -1,0 +1,244 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.App"
+             RequestedThemeVariant="Light">
+
+  <Application.Resources>
+
+    <!-- ============================================================
+         清新 macOS 设计系统（参考 Apple HIG：Clarity / Deference / Depth）
+         浅灰窗体底色 + 白卡片 + 发丝线 + systemBlue 强调色
+         ============================================================ -->
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Light">
+          <Color x:Key="WindowBgColor">#F5F5F7</Color>
+          <SolidColorBrush x:Key="WindowBgBrush" Color="#F5F5F7" />
+          <SolidColorBrush x:Key="SidebarBgBrush" Color="#ECECEF" />
+          <SolidColorBrush x:Key="CardBgBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="CardHoverBrush" Color="#F6F6F9" />
+          <SolidColorBrush x:Key="HairlineBrush" Color="#E3E3E8" />
+          <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1D1D1F" />
+          <SolidColorBrush x:Key="TextSecondaryBrush" Color="#86868B" />
+          <SolidColorBrush x:Key="AccentBrush" Color="#007AFF" />
+          <SolidColorBrush x:Key="AccentHoverBrush" Color="#157AFF" />
+          <SolidColorBrush x:Key="AccentSoftBrush" Color="#1474FF1F" />
+          <SolidColorBrush x:Key="SuccessBrush" Color="#34C759" />
+          <SolidColorBrush x:Key="WarningBrush" Color="#FF9500" />
+          <SolidColorBrush x:Key="DangerBrush" Color="#FF3B30" />
+          <SolidColorBrush x:Key="PurpleBrush" Color="#AF52DE" />
+          <SolidColorBrush x:Key="SelectionPillBrush" Color="#DFDFE4" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+          <Color x:Key="WindowBgColor">#1E1E20</Color>
+          <SolidColorBrush x:Key="WindowBgBrush" Color="#1E1E20" />
+          <SolidColorBrush x:Key="SidebarBgBrush" Color="#26262A" />
+          <SolidColorBrush x:Key="CardBgBrush" Color="#2A2A2E" />
+          <SolidColorBrush x:Key="CardHoverBrush" Color="#333338" />
+          <SolidColorBrush x:Key="HairlineBrush" Color="#3A3A40" />
+          <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F5F5F7" />
+          <SolidColorBrush x:Key="TextSecondaryBrush" Color="#98989D" />
+          <SolidColorBrush x:Key="AccentBrush" Color="#0A84FF" />
+          <SolidColorBrush x:Key="AccentHoverBrush" Color="#2A94FF" />
+          <SolidColorBrush x:Key="AccentSoftBrush" Color="#0A84FF2E" />
+          <SolidColorBrush x:Key="SuccessBrush" Color="#30D158" />
+          <SolidColorBrush x:Key="WarningBrush" Color="#FF9F0A" />
+          <SolidColorBrush x:Key="DangerBrush" Color="#FF453A" />
+          <SolidColorBrush x:Key="PurpleBrush" Color="#BF5AF2" />
+          <SolidColorBrush x:Key="SelectionPillBrush" Color="#3E3E44" />
+        </ResourceDictionary>
+
+      </ResourceDictionary.ThemeDictionaries>
+
+      <!-- 字号阶梯（SF 风格） -->
+      <x:Double x:Key="FontSizeXl">24</x:Double>
+      <x:Double x:Key="FontSizeLg">18</x:Double>
+      <x:Double x:Key="FontSizeMd">14</x:Double>
+      <x:Double x:Key="FontSizeSm">12.5</x:Double>
+      <x:Double x:Key="FontSizeXs">11</x:Double>
+
+      <FontFamily x:Key="AppFontFamily">assets/Inter#Inter, Segoe UI Variable, PingFang SC, Hiragino Sans GB, Microsoft YaHei UI</FontFamily>
+      <FontFamily x:Key="MonoFontFamily">Consolas, Menlo, monospace</FontFamily>
+
+      <CornerRadius x:Key="CardRadius">10</CornerRadius>
+      <CornerRadius x:Key="ControlRadius">6</CornerRadius>
+      <Thickness x:Key="CardPadding">16</Thickness>
+    </ResourceDictionary>
+
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <!-- 全局字体 -->
+    <Style Selector="Window, UserControl">
+      <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
+    </Style>
+
+    <!-- [样式] 卡片 -->
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource CardBgBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource CardRadius}" />
+      <Setter Property="Padding" Value="{StaticResource CardPadding}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource HairlineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BoxShadow" Value="0 1 3 0 #14000000" />
+    </Style>
+
+    <!-- [样式] 主按钮（systemBlue 填充） -->
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
+      <Setter Property="Padding" Value="14,7" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="MinHeight" Value="32" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+    </Style>
+    <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+
+    <!-- [样式] 次级按钮（白底描边） -->
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="{DynamicResource CardBgBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource HairlineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
+      <Setter Property="Padding" Value="14,7" />
+      <Setter Property="MinHeight" Value="32" />
+    </Style>
+    <Style Selector="Button.secondary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <!-- [样式] 幽灵按钮 -->
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="MinHeight" Value="30" />
+    </Style>
+    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SelectionPillBrush}" />
+    </Style>
+
+    <!-- [样式] 侧栏导航项 -->
+    <Style Selector="RadioButton.nav">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="FontSize" Value="{StaticResource FontSizeMd}" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Margin" Value="0,1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="Transparent"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="RadioButton.nav:checked /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource SelectionPillBrush}" />
+    </Style>
+    <Style Selector="RadioButton.nav:pointerover /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+    <Style Selector="RadioButton.nav:checked:pointerover /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource SelectionPillBrush}" />
+    </Style>
+    <Style Selector="RadioButton.nav TextBlock.nav-icon">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,9,0" />
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+
+    <!-- [样式] 文本 -->
+    <Style Selector="TextBlock.h1">
+      <Setter Property="FontSize" Value="{StaticResource FontSizeXl}" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.h2">
+      <Setter Property="FontSize" Value="{StaticResource FontSizeLg}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.body">
+      <Setter Property="FontSize" Value="{StaticResource FontSizeMd}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- [样式] 输入框 -->
+    <Style Selector="TextBox">
+      <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="Background" Value="{DynamicResource CardBgBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource HairlineBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="MinHeight" Value="32" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+
+    <!-- [样式] 分类筛选胶囊（chip） -->
+    <Style Selector="ToggleButton.chip">
+      <Setter Property="Background" Value="{DynamicResource CardBgBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource HairlineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="FontSize" Value="{StaticResource FontSizeXs}" />
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
+    <Style Selector="ToggleButton.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.chip:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.chip:checked">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <!-- [样式] 列表 -->
+    <Style Selector="ListBox">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBoxItem">
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="Margin" Value="0,1" />
+    </Style>
+
+    <!-- [样式] 开关（macOS 风格由 Fluent ToggleSwitch 承担，微调内边距） -->
+    <Style Selector="ToggleSwitch">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+  </Application.Styles>
+</Application>

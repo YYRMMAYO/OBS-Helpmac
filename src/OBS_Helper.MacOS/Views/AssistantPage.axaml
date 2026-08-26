@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.AssistantPage">
+  <ScrollViewer Padding="28,24" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="16" MaxWidth="860" HorizontalAlignment="Left">
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="问一句，找到对的方案" Classes="h2" />
+            <Border x:Name="EnginePill" CornerRadius="9" Padding="8,2" VerticalAlignment="Center"
+                    Background="{DynamicResource AccentSoftBrush}">
+              <TextBlock x:Name="EngineText" Text="本地引擎" FontSize="{StaticResource FontSizeXs}"
+                         Foreground="{DynamicResource AccentBrush}" />
+            </Border>
+          </StackPanel>
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <TextBox x:Name="QueryBox" Watermark="例如：直播时画面卡顿掉帧怎么办？" KeyDown="OnEnter" />
+            <Button x:Name="AskBtn" Grid.Column="1" Classes="primary" Content="提问" Click="OnAsk" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- 回答区 -->
+      <StackPanel x:Name="AnswerPanel" Spacing="12" />
+
+      <!-- 空态建议 -->
+      <Border Classes="card" x:Name="SuggestCard">
+        <StackPanel Spacing="6">
+          <TextBlock Text="试试这样问" FontWeight="SemiBold" />
+          <ItemsControl x:Name="SuggestList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="ghost" Padding="4,2" HorizontalAlignment="Left" Click="OnSuggestion">
+                  <TextBlock Text="{Binding}" Foreground="{DynamicResource AccentBrush}" />
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

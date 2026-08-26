@@ -1,0 +1,116 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.SearchPage">
+  <Grid Margin="28,24" ColumnDefinitions="330,*" ColumnSpacing="18">
+
+    <!-- 左：搜索与问题列表 -->
+    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+      <TextBox x:Name="SearchBox" Grid.Row="0" Watermark="搜索症状、原因或步骤…" TextChanged="OnSearchChanged" />
+
+      <WrapPanel x:Name="CategoryChips" Grid.Row="1" />
+
+      <ListBox x:Name="ResultList" Grid.Row="2" DoubleTapped="OnProblemActivated" SelectionMode="Single">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Spacing="3">
+              <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13.5" />
+              <TextBlock Classes="muted" FontSize="{StaticResource FontSizeXs}"
+                         Text="{Binding MetaText}" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <TextBlock x:Name="ResultCount" Grid.Row="3" Classes="muted" />
+    </Grid>
+
+    <!-- 右：详情 -->
+    <ScrollViewer Grid.Column="1">
+      <StackPanel x:Name="DetailPanel" Spacing="14">
+
+        <Border Classes="card" IsVisible="False" x:Name="DetailHeaderCard">
+          <StackPanel Spacing="10">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock x:Name="DetailTitle" Classes="h2" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Border x:Name="SeverityPill" CornerRadius="9" Padding="8,2" Background="#1474FF1F">
+                <TextBlock x:Name="SeverityText" FontSize="{StaticResource FontSizeXs}" Foreground="{DynamicResource AccentBrush}" />
+              </Border>
+              <Button x:Name="BookmarkBtn" Classes="secondary" Padding="10,4" Click="OnToggleBookmark">收藏</Button>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card" x:Name="SymptomsCard" IsVisible="False">
+          <StackPanel>
+            <TextBlock Text="典型症状" FontWeight="SemiBold" Margin="0,0,0,8" />
+            <ItemsControl x:Name="SymptomList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate><TextBlock Text="{Binding}" Classes="body" Margin="0,3" TextWrapping="Wrap" /></DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card" x:Name="StepsCard" IsVisible="False">
+          <StackPanel>
+            <TextBlock Text="解决步骤" FontWeight="SemiBold" Margin="0,0,0,8" />
+            <ItemsControl x:Name="StepList" ><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Ellipse Width="20" Height="20" Fill="{DynamicResource AccentSoftBrush}">
+                      <Ellipse.Styles>
+                        <Style Selector="Ellipse"><Setter Property="VerticalAlignment" Value="Top" /></Style>
+                      </Ellipse.Styles>
+                    </Ellipse>
+                    <StackPanel>
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding Detail}" Classes="muted" Margin="0,2" />
+                    </StackPanel>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card" x:Name="TipsCard" IsVisible="False">
+          <StackPanel>
+            <TextBlock Text="提示" FontWeight="SemiBold" Margin="0,0,0,8" />
+            <ItemsControl x:Name="TipList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate><TextBlock Text="{Binding}" Classes="body" Margin="0,3" TextWrapping="Wrap" /></DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card" x:Name="LinksCard" IsVisible="False">
+          <StackPanel>
+            <TextBlock Text="官方文档 / 参考链接" FontWeight="SemiBold" Margin="0,0,0,8" />
+            <ItemsControl x:Name="LinkList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Button Classes="ghost" Padding="0" HorizontalAlignment="Left" Click="OnOpenLink" Tag="{Binding Url}">
+                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource AccentBrush}" />
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- 空态 -->
+        <Border x:Name="EmptyState">
+          <StackPanel HorizontalAlignment="Center" Spacing="8" Margin="0,120,0,0">
+            <TextBlock Text="从左侧选择一个问题" Classes="h2" HorizontalAlignment="Center" />
+            <TextBlock Text="212+ 条分步排障方案，支持按分类浏览与全文检索。" Classes="muted" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.MonitorPage">
+  <ScrollViewer Padding="28,24" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="16" MaxWidth="860" HorizontalAlignment="Left">
+
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="实时监控" Classes="h2" />
+            <ToggleButton x:Name="WatchToggle" Grid.Column="1" Content="开启监控循环"
+                          Checked="OnToggleWatch" Unchecked="OnToggleWatch" />
+          </Grid>
+          <TextBlock Classes="muted"
+                     Text="通过 obs-websocket 实时读取输出状态，检测渲染卡顿、丢帧与磁盘空间，异常时给出预警。" />
+        </StackPanel>
+      </Border>
+
+      <!-- 指标 -->
+      <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
+        <Border Classes="card"><StackPanel Spacing="6"><TextBlock x:Name="FpsText" Text="—" Classes="h1"/><TextBlock Text="输出帧率 (FPS)" Classes="muted"/></StackPanel></Border>
+        <Border Classes="card"><StackPanel Spacing="6"><TextBlock x:Name="RenderTimeText" Text="—" Classes="h1"/><TextBlock Text="帧渲染耗时 (ms)" Classes="muted"/></StackPanel></Border>
+        <Border Classes="card"><StackPanel Spacing="6"><TextBlock x:Name="SkipText" Text="—" Classes="h1"/><TextBlock Text="渲染跳帧率" Classes="muted"/></StackPanel></Border>
+      </Grid>
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+        <Border Classes="card"><StackPanel Spacing="6"><TextBlock x:Name="DropText" Text="—" Classes="h1"/><TextBlock Text="网络丢帧率" Classes="muted"/></StackPanel></Border>
+        <Border Classes="card"><StackPanel Spacing="6"><TextBlock x:Name="DiskText" Text="—" Classes="h1"/><TextBlock Text="录制盘剩余" Classes="muted"/></StackPanel></Border>
+      </Grid>
+
+      <!-- 预警列表 -->
+      <TextBlock Text="预警记录" Classes="h2" Margin="2,6,0,0"/>
+      <ItemsControl x:Name="AlertList" ><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Classes="card" Padding="14">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Ellipse Width="10" Height="10" VerticalAlignment="Top" Margin="0,5,0,0"
+                         Fill="{Binding DotBrush}" />
+                <StackPanel>
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Detail}" Classes="muted" Margin="0,3" />
+                  <TextBlock Text="{Binding Suggestion}" Classes="body" TextWrapping="Wrap" />
+                  <Button Classes="ghost" Padding="2" HorizontalAlignment="Left" IsVisible="{Binding HasProblem}"
+                          Click="OnOpenProblem" Tag="{Binding ProblemId}">
+                    <TextBlock Text="查看相关方案 →" Foreground="{DynamicResource AccentBrush}" />
+                  </Button>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>OBS 排障助手</string>
+  <key>CFBundleDisplayName</key>
+  <string>OBS 排障助手</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.obshelper.macos</string>
+  <key>CFBundleVersion</key>
+  <string>2.0.0</string>
+  <key>CFBundleShortVersionString</key>
+  <string>2.0.0</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleExecutable</key>
+  <string>OBS_Helper.MacOS</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright (c) 2026 OBS Helper</string>
+  <!-- 摄像头 / 麦克风权限说明：应用自身不采集，但 OBS 相关指引会跳转系统设置 -->
+  <key>NSCameraUsageDescription</key>
+  <string>用于检测摄像头是否可被 OBS 正常调用。</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>用于检测麦克风设备状态，帮助排查无声问题。</string>
+</dict>
+</plist>

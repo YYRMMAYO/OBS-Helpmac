@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.PluginsPage">
+  <ScrollViewer Padding="28,24" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="14" MaxWidth="860" HorizontalAlignment="Left">
+
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="macOS 插件目录" Classes="h2" />
+          <TextBlock Classes="muted"
+                     Text="macOS 版 OBS 的插件（.plugin 包）安装在下方目录。点击可在 Finder 中直接打开对应位置。" />
+          <Button Classes="ghost" Padding="4,2" HorizontalAlignment="Left" Click="OnRevealPlugins">
+            <TextBlock Text="~/Library/Application Support/obs-studio/plugins"
+                       FontFamily="{StaticResource MonoFontFamily}"
+                       Foreground="{DynamicResource AccentBrush}" FontSize="{StaticResource FontSizeSm}" />
+          </Button>
+        </StackPanel>
+      </Border>
+
+      <!-- 已安装插件扫描 -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="本机插件" Classes="h2" />
+            <Button Grid.Column="1" Classes="secondary" Content="重新扫描" Click="OnScan" />
+          </Grid>
+          <ItemsControl x:Name="PluginList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border BorderBrush="{DynamicResource HairlineBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel>
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding Path}" Classes="muted" FontSize="{StaticResource FontSizeXs}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- 常见问题 -->
+      <Border Classes="card">
+        <StackPanel Spacing="6">
+          <TextBlock Text="常见问题" FontWeight="SemiBold" Margin="0,0,0,4" />
+          <TextBlock Classes="body" TextWrapping="Wrap"
+                     Text="· Apple Silicon 与 Intel 插件不通用：安装前确认插件提供 universal 或 arm64 版本。" />
+          <TextBlock Classes="body" TextWrapping="Wrap"
+                     Text="· Gatekeeper 拦截：首次加载第三方插件若提示「无法验证开发者」，到系统设置 → 隐私与安全性中点「仍要打开」。" />
+          <TextBlock Classes="body" TextWrapping="Wrap"
+                     Text="· 插件导致崩溃时，把 .plugin 包移出 plugins 目录即可卸载；OBS 日志中会列出加载失败的插件。" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OBS_Helper.MacOS.Views.ConsolePage">
+  <ScrollViewer Padding="28,24" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="16" MaxWidth="860" HorizontalAlignment="Left">
+
+      <!-- 连接 -->
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <TextBlock Text="OBS 连接" Classes="h2" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+              <Ellipse x:Name="StateDot" Width="9" Height="9" Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+              <TextBlock x:Name="StateText" Text="未连接" Classes="muted" VerticalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+
+          <Grid ColumnDefinitions="Auto,*,Auto,90,Auto,Auto,Auto,Auto" ColumnSpacing="8">
+            <TextBlock Text="地址" VerticalAlignment="Center" />
+            <TextBox x:Name="HostBox" Grid.Column="1" Watermark="127.0.0.1" />
+            <TextBlock Grid.Column="2" Text="端口" VerticalAlignment="Center" Margin="8,0,0,0" />
+            <TextBox x:Name="PortBox" Grid.Column="3" Watermark="4455" />
+            <TextBlock Grid.Column="4" Text="密码" VerticalAlignment="Center" Margin="8,0,0,0" />
+            <TextBox x:Name="PasswordBox" Grid.Column="5" Width="140" PasswordChar="•" Watermark="可选" />
+            <Button x:Name="ConnectBtn" Grid.Column="6" Classes="primary" Content="连接" Click="OnConnect" />
+            <Button x:Name="DisconnectBtn" Grid.Column="7" Classes="secondary" Content="断开" Click="OnDisconnect" IsVisible="False" />
+          </Grid>
+
+          <CheckBox x:Name="RememberPwd" Content="记住密码（存入系统钥匙串）" />
+          <TextBlock x:Name="ErrorText" Classes="muted" Foreground="{DynamicResource DangerBrush}" IsVisible="False" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <!-- 场景 -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Text="场景" Classes="h2" />
+          <ItemsControl x:Name="SceneList">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="secondary" Margin="0,0,8,8" Click="OnSwitchScene" Tag="{Binding Name}"
+                        Content="{Binding Label}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- 输出控制 -->
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <TextBlock Text="输出控制" Classes="h2" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button x:Name="RecordBtn" Classes="secondary" Content="开始录制" Click="OnRecord" MinWidth="96" />
+            <Button x:Name="StreamBtn" Classes="secondary" Content="开始推流" Click="OnStream" MinWidth="96" />
+            <Button x:Name="VcamBtn" Classes="secondary" Content="启动虚拟摄像头" Click="OnVcam" MinWidth="120" />
+          </StackPanel>
+          <TextBlock x:Name="OutputStatus" Classes="muted" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
